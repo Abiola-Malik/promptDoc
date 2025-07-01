@@ -55,7 +55,10 @@ const createNewUser = async ({ username, email, password }: userProps) => {
 const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
   const existingUser = await getUserByEmail(email);
   if (existingUser.documents.length === 0) {
-    throw new Error('User not found, sign up instead');
+    return {
+      success: false,
+      error: 'User not found',
+    };
   }
   try {
     const { account } = await createSessionClient();
@@ -75,7 +78,10 @@ const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
       },
     };
   } catch (error) {
-    throw new Error('Invalid credentials');
+    return {
+      success: false,
+      error: 'Invalid credentials',
+    };
   }
 };
 export { createNewUser, getUserByEmail, loginUser };
