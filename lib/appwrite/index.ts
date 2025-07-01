@@ -27,15 +27,6 @@ const createSessionClient = async () => {
     .setEndpoint(appwriteConfig.EndpointUrl)
     .setProject(appwriteConfig.ProjectId);
 
-  const cookieStore = await cookies();
-
-  const session = cookieStore.get('session');
-
-  if (session && session.value) {
-    client.setSession(session.value);
-  } else {
-    throw new Error(' no session');
-  }
   return {
     get account() {
       return new Account(client);

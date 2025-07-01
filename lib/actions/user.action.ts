@@ -1,6 +1,9 @@
-import { Query } from 'node-appwrite';
+import { Query, ID } from 'node-appwrite';
 import { createAdminClient, createSessionClient } from '../appwrite';
 import { appwriteConfig } from '../appwrite/config';
+import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
+import { isProduction } from '../utils';
 
 interface userProps {
   username: string;
@@ -8,37 +11,71 @@ interface userProps {
   password: string;
 }
 
-const { AppwriteKey, EndpointUrl, ProjectId, DatabaseId, UsersCollectionId } =
+const { AppwriteKey, EndpointUrl, ProjectId, DatabaseId, usersCollectionId } =
   appwriteConfig;
 
 const getUserByEmail = async (email: string) => {
   const { databases } = await createAdminClient();
 
-  const existingUser = databases.listDocuments(DatabaseId, UsersCollectionId, [
-    Query.equal('email', email),
-  ]);
-  if (!existingUser) {
+  const existingUser = await databases.listDocuments(
+    DatabaseId,
+    usersCollectionId,
+    [Query.equal('email', email)]
+  );
+  if (existingUser.documents.length < 0) {
     throw new Error('User not found');
   }
   return existingUser;
 };
 const createNewUser = async ({ username, email, password }: userProps) => {
-  const { databases } = await createAdminClient();
+  const { databases, account } = await createAdminClient();
   const existingUser = await getUserByEmail(email);
-  if (existingUser) {
+  if (existingUser.documents.length > 0) {
     throw new Error('User already exists, login instead');
   }
-  const user = await databases.createDocument(
+  const user = await account.create(ID.unique(), email, password, username);
+  const userProfileDocument = await databases.createDocument(
     DatabaseId,
-    UsersCollectionId,
-    'unique()',
+    usersCollectionId,
+    user.$id,
     {
       username,
       email,
-      password,
     }
   );
-  return JSON.stringify(user);
+  return {
+    success: true,
+    user: {
+      username: userProfileDocument.username,
+      email: userProfileDocument.email,
+      userId: userProfileDocument.$id,
+    },
+  };
 };
+const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
+  const existingUser = await getUserByEmail(email);
+  if (existingUser.documents.length === 0) {
+    throw new Error('User not found, sign up instead');
+  }
+  try {
+    const { account } = await createSessionClient();
+    const session = await account.createEmailPasswordSession(email, password);
+    (await cookies()).set('session', session.$id, {
+      httpOnly: true,
+      path: '/',
+      secure: isProduction,
+    });
 
-export { createNewUser, getUserByEmail };
+    return {
+      success: true,
+      user: {
+        username: existingUser.documents[0].username,
+        email: existingUser.documents[0].email,
+        userId: existingUser.documents[0].$id,
+      },
+    };
+  } catch (error) {
+    throw new Error('Invalid credentials');
+  }
+};
+export { createNewUser, getUserByEmail, loginUser };
