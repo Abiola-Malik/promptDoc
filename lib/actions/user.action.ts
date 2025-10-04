@@ -11,8 +11,7 @@ interface userProps {
   password: string;
 }
 
-const { AppwriteKey, EndpointUrl, ProjectId, DatabaseId, usersCollectionId } =
-  appwriteConfig;
+const { DatabaseId, usersCollectionId } = appwriteConfig;
 
 const getUserByEmail = async (email: string) => {
   const { databases } = await createAdminClient();
@@ -50,6 +49,7 @@ const createNewUser = async ({ username, email, password }: userProps) => {
       email: userProfileDocument.email,
       userId: userProfileDocument.$id,
     },
+    status: 201,
   };
 };
 const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
@@ -57,16 +57,18 @@ const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
   if (existingUser.documents.length === 0) {
     return {
       success: false,
+      status: 401,
       error: 'User not found',
     };
   }
   try {
-    const { account } = await createSessionClient();
+    const { account } = await createAdminClient();
     const session = await account.createEmailPasswordSession(email, password);
-    (await cookies()).set('session', session.$id, {
+    (await cookies()).set('session', session.secret, {
       httpOnly: true,
       path: '/',
       secure: isProduction,
+      expires: new Date(session.expire),
     });
 
     return {
@@ -80,6 +82,7 @@ const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
   } catch (error) {
     return {
       success: false,
+      status: 401,
       error: 'Invalid credentials',
     };
   }

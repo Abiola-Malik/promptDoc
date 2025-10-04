@@ -22,10 +22,14 @@ const createAdminClient = async () => {
   };
 };
 
-const createSessionClient = async () => {
+const createSessionClient = async (session: string) => {
   const client = new Client()
     .setEndpoint(appwriteConfig.EndpointUrl)
     .setProject(appwriteConfig.ProjectId);
+
+  if (session) {
+    client.setSession(session);
+  }
 
   return {
     get account() {
