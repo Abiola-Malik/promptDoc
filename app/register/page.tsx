@@ -1,8 +1,11 @@
 import { createNewUser } from '@/lib/actions/user.action';
 import { createAdminClient } from '@/lib/appwrite';
-import { appwriteConfig } from '@/lib/appwrite/config';
 import { cookies } from 'next/headers';
-
+import { redirect } from 'next/navigation';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card" 
+import Link from 'next/link';
+import { signUpWithGoogle } from '@/lib/server/oauth';
+import { SignUpFormClient } from '@/components/auth/SignUpFormClient';
 const page = async () => {
   async function handleSubmit(formdata: FormData) {
     'use server';
@@ -12,86 +15,107 @@ const page = async () => {
     const email = data.email as string;
     const password = data.password as string;
 
+    // Server-side validation (backup)
+    const errors: Record<string, string> = {};
+
+    if (!username || username.trim().length < 3) {
+      errors.username = 'Username must be at least 3 characters long';
+    } else if (username.trim().length > 20) {
+      errors.username = 'Username must not exceed 20 characters';
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      errors.email = 'Please provide a valid email address';
+    }
+
+    if (!password || password.length < 8) {
+      errors.password = 'Password must be at least 8 characters long';
+    } else if (!/(?=.*[a-z])/.test(password)) {
+      errors.password = 'Password must contain at least one lowercase letter';
+    } else if (!/(?=.*[A-Z])/.test(password)) {
+      errors.password = 'Password must contain at least one uppercase letter';
+    } else if (!/(?=.*\d)/.test(password)) {
+      errors.password = 'Password must contain at least one number';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      return { errors, success: false };
+    }
+
     try {
       const result = await createNewUser({
-        username,
-        email,
+        username: username.trim(),
+        email: email.toLowerCase().trim(),
         password,
       });
+
       if (result) {
         const { account } = await createAdminClient();
 
         const session = await account.createEmailPasswordSession(
-          email,
+          email.toLowerCase().trim(),
           password
         );
+        
         const cookieStore = await cookies();
-        cookieStore.set('session', session.secret);
+        cookieStore.set('session', session.secret, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 60 * 60 * 24 * 30, // 30 days
+        });
+        return { success: true };
+      } else {
+        return { 
+          errors: { general: 'Failed to create account. Please try again.' }, 
+          success: false 
+        };
       }
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('Signup error:', error);
+      
+      let errorMsg = 'An unexpected error occurred. Please try again.';
+      
+      // Handle specific Appwrite errors
+      if (error.code === 409) {
+        errorMsg = 'An account with this email already exists.';
+      } else if (error.code === 400) {
+        errorMsg = 'Invalid input. Please check your details.';
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+
+      return { errors: { general: errorMsg }, success: false };
     }
   }
 
   return (
-    <div className='min-h-screen flex items-center justify-center bg-gray-100'>
-      <form
-        action={handleSubmit}
-        className='bg-white p-8 rounded-lg shadow-md w-96'
-      >
-        <h2 className='text-2xl font-bold mb-6 text-center'>Register</h2>
-        <div className='mb-4'>
-          <label
-            htmlFor='username'
-            className='block text-gray-700 text-sm font-bold mb-2'
-          >
-            Username
-          </label>
-          <input
-            type='text'
-            id='username'
-            name='username'
-            className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500'
-            placeholder='Enter your username'
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="w-full max-w-md border-border bg-card">
+        <CardHeader className="space-y-2 text-center">
+          <CardTitle className="text-3xl font-semibold tracking-tight text-card-foreground">
+            Create an account
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Enter your details below to get started
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <SignUpFormClient 
+            handleSubmit={handleSubmit}
+            signUpWithGoogle={signUpWithGoogle}
           />
-        </div>
-        <div className='mb-4'>
-          <label
-            htmlFor='email'
-            className='block text-gray-700 text-sm font-bold mb-2'
-          >
-            Email
-          </label>
-          <input
-            type='email'
-            name='email'
-            id='email'
-            className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500'
-            placeholder='Enter your email'
-          />
-        </div>
-        <div className='mb-6'>
-          <label
-            htmlFor='password'
-            className='block text-gray-700 text-sm font-bold mb-2'
-          >
-            Password
-          </label>
-          <input
-            type='password'
-            id='password'
-            name='password'
-            className='w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-blue-500'
-            placeholder='Enter your password'
-          />
-        </div>
-        <button
-          type='submit'
-          className='w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-md hover:bg-blue-600 transition-colors'
-        >
-          Register
-        </button>
-      </form>
+
+          <p className="text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link href="/login" className="font-medium text-foreground hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 };

@@ -5,7 +5,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { OAuthProvider } from 'node-appwrite';
 
-export async function signUpWithGithub() {
+export async function signUpWithGoogle() {
   const { account } = await createAdminClient();
 
   const headersList = await headers();
