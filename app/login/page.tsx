@@ -1,7 +1,6 @@
 import { loginUser } from '@/lib/actions/user.action';
 
 
-import { redirect } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card" 
 import Link from 'next/link';
 import { signUpWithGoogle } from '@/lib/server/oauth';
@@ -48,17 +47,15 @@ const page = async () => {
     if (result.success) {
        return { success: true };
       } 
-    } catch (error: any) {
-      console.error('login error:', error);
+    } catch (error: unknown) {
+      if(error instanceof Error){
+        console.error('login error message:', error.message);
+      }
       
-      let errorMsg = 'Invalid credentials';
+      const errorMsg = 'Invalid credentials';
       
       // Handle specific Appwrite errors
-     if (error.code === 400) {
-        errorMsg = 'Invalid input. Please check your details.';
-      } else if (error.message) {
-        errorMsg = error.message;
-      }
+    
 
       return { errors: { general: errorMsg }, success: false };
     }
@@ -82,7 +79,7 @@ const page = async () => {
           />
 
           <p className="text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            Don&apos;t have an account?
             <Link href="/register" className="font-medium text-foreground hover:underline">
               Sign Up
             </Link>

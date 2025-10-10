@@ -11,7 +11,10 @@ export default function CurrentUserExample() {
     axios
       .get('/api/user', { withCredentials: true })
       .then((res) => setUser(res.data.user))
-      .catch((err) => console.log('Not logged in', err));
+      .catch((err:unknown) => {
+          if (err instanceof Error)
+        console.log('Not logged in', err)
+      });
   }, []);
 
   return (

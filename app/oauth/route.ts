@@ -1,5 +1,4 @@
 import { createAdminClient } from "@/lib/appwrite";
-import { appwriteConfig } from "@/lib/appwrite/config";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 

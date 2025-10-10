@@ -45,8 +45,13 @@ export async function GET() {
         userId: dbUser.$id,
       },
     });
-  } catch (err: any) {
-    console.error('[API] /api/auth/user error:', err.message);
+  } catch (error: unknown) {
+    if (error instanceof Error){
+      console.error('[API] /api/auth/user error:', error.message);
+    }else{
+      console.error('[API] /api/auth/user unknown error:', error);
+    }
+    
     return NextResponse.json({ error: 'Invalid session' }, { status: 403 });
   }
 }

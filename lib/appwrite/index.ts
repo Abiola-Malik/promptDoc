@@ -2,7 +2,6 @@
 
 import { Client, Account, Databases, Storage } from 'node-appwrite';
 import { appwriteConfig } from './config';
-import { cookies } from 'next/headers';
 const createAdminClient = async () => {
   const client = new Client()
     .setEndpoint(appwriteConfig.EndpointUrl)

@@ -1,7 +1,6 @@
 import { createNewUser } from '@/lib/actions/user.action';
 import { createAdminClient } from '@/lib/appwrite';
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card" 
 import Link from 'next/link';
 import { signUpWithGoogle } from '@/lib/server/oauth';
@@ -73,19 +72,17 @@ const page = async () => {
           success: false 
         };
       }
-    } catch (error: any) {
-      console.error('Signup error:', error);
-      
-      let errorMsg = 'An unexpected error occurred. Please try again.';
-      
-      // Handle specific Appwrite errors
-      if (error.code === 409) {
-        errorMsg = 'An account with this email already exists.';
-      } else if (error.code === 400) {
-        errorMsg = 'Invalid input. Please check your details.';
-      } else if (error.message) {
+    } catch (error: unknown) {
+            let errorMsg = 'An unexpected error occurred. Please try again.';
+
+      if(error instanceof Error){
+              console.error('Signup error:', error);
+
+      }else if (error instanceof Error && error.message) {
         errorMsg = error.message;
       }
+      
+     
 
       return { errors: { general: errorMsg }, success: false };
     }

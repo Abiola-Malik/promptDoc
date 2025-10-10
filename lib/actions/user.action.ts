@@ -1,7 +1,6 @@
 import { Query, ID } from 'node-appwrite';
-import { createAdminClient, createSessionClient } from '../appwrite';
+import { createAdminClient } from '../appwrite';
 import { appwriteConfig } from '../appwrite/config';
-import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { isProduction } from '../utils';
 
