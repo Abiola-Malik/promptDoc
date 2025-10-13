@@ -10,12 +10,12 @@ interface AuthResponse {
   errors?: Record<string, string>;
 }
 interface SignInFormClient {
-  handleSubmit: (formdata: FormData) => Promise<AuthResponse>;
+  handleSubmit: (formdata: FormData) => Promise<AuthResponse | undefined>;
   signUpWithGoogle: () => Promise<void>;
 }
 
 interface SignUpFormClientProps {
-  handleSubmit: (formdata: FormData) => Promise<AuthResponse>;
+  handleSubmit: (formdata: FormData) => Promise<AuthResponse | undefined>;
   signUpWithGoogle: () => Promise<void>;
 }
 
