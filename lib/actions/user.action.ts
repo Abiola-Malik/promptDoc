@@ -4,11 +4,7 @@ import { appwriteConfig } from '../appwrite/config';
 import { cookies } from 'next/headers';
 import { isProduction } from '../utils';
 
-interface userProps {
-  username: string;
-  email: string;
-  password: string;
-}
+
 
 const { DatabaseId, usersCollectionId } = appwriteConfig;
 
@@ -78,12 +74,18 @@ const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
         userId: existingUser.documents[0].$id,
       },
     };
-  } catch (error) {
-    return {
-      success: false,
-      status: 401,
-      error: 'Invalid credentials',
-    };
+  } catch (error: unknown) {
+  if (error instanceof Error) {
+    console.error('[loginUser] Error:', error.message);
+  } else {
+    console.error('[loginUser] Unknown error:', error);
   }
+
+  return {
+    success: false,
+    status: 401,
+    error: 'Invalid credentials',
+  }
+}
 };
 export { createNewUser, getUserByEmail, loginUser };

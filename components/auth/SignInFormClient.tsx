@@ -6,10 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useRouter } from 'next/navigation';
-interface SignInFormClient {
-  handleSubmit: (formdata: FormData) => Promise<any>;
-  signUpWithGoogle: () => Promise<void>;
-}
+
 
 export function SignInFormClient({ handleSubmit, signUpWithGoogle }: SignInFormClient) {
   const [isPending, startTransition] = useTransition();

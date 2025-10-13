@@ -1,13 +1,4 @@
-interface appwriteConfig {
-  AppwriteKey: string;
-  ProjectId: string;
-  EndpointUrl: string;
-  DatabaseId: string;
-  usersCollectionId: string;
-  chatsCollectionId: string;
-  projectsCollectionId: string;
-  messagesCollectionId: string;
-}
+
 
 export const appwriteConfig: appwriteConfig = {
   AppwriteKey: process.env.NEXT_PUBLIC_APPWRITE_KEY || '',

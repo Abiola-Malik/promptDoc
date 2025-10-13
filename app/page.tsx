@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
+
 export default function CurrentUserExample() {
-  const [user, setUser]: [any, React.Dispatch<React.SetStateAction<any>>] =
-    useState(null);
+ const [user, setUser] = useState<User | null>(null);
+   
 
   useEffect(() => {
     axios
