@@ -2,7 +2,8 @@ import { Query, ID } from 'node-appwrite';
 import { createAdminClient } from '../appwrite';
 import { appwriteConfig } from '../appwrite/config';
 import { cookies } from 'next/headers';
-import { isProduction } from '../utils';
+import {  isProduction } from '../utils';
+
 
 
 
@@ -88,4 +89,28 @@ const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
   }
 }
 };
-export { createNewUser, getUserByEmail, loginUser };
+
+const logOutUser = async () => {
+  // const {session} = await getSession()
+  try {
+    const { account } = await createAdminClient();
+    await account.deleteSession('current');
+    cookieStore.delete('session');
+    return {
+      success: true,
+      message: 'Logged out successfully',
+    };
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error('[logOutUser] Error:', error.message);
+    } else {
+      console.error('[logOutUser] Unknown error:', error);
+    }   
+    return {
+      success: false,
+      status: 500,
+      error: 'Failed to log out',
+    };
+  }
+}
+export { createNewUser, getUserByEmail, loginUser, logOutUser };

@@ -1,16 +1,15 @@
 // app/api/auth/current-user/route.ts
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { createSessionClient } from '@/lib/appwrite';
 import { appwriteConfig } from '@/lib/appwrite/config';
 import { Query } from 'node-appwrite';
+import { getSession } from '@/lib/helpers';
 
 const { DatabaseId, usersCollectionId } = appwriteConfig;
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get('session')?.value;
+    const {session } = await getSession()
 
     if (!session) {
       return NextResponse.json({ error: 'No session' }, { status: 401 });

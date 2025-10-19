@@ -35,3 +35,8 @@ interface appwriteConfig {
   projectsCollectionId: string;
   messagesCollectionId: string;
 }
+
+interface session {
+  success: boolean,
+  session : string
+}

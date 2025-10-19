@@ -1,26 +1,36 @@
-'use client';
+import Navbar from "@/components/homepage/navbar"
+import Hero from "@/components/homepage/hero"
+import Features from "@/components/homepage/features"
+import HowItWorks from "@/components/homepage/how-it-works"
+import Showcase from "@/components/homepage/showcase"
+import Pricing from "@/components/homepage/pricing"
+import BlogPreview from "@/components/homepage/blog-preview"
+import CTABanner from "@/components/homepage/cta-banner"
+import Footer from "@/components/homepage/footer"
 
-import { useEffect, useState } from 'react';
-import axios from 'axios';
+export const metadata = {
+  title: "PromptDoc - AI-Powered Documentation for Developers",
+  description:
+    "Generate beautiful code documentation instantly with AI. Turn your code into clean, structured documentation with just one prompt.",
+  openGraph: {
+    title: "PromptDoc - AI-Powered Documentation for Developers",
+    description: "Generate beautiful code documentation instantly with AI.",
+    type: "website",
+  },
+}
 
-
-export default function CurrentUserExample() {
- const [user, setUser] = useState<User | null>(null);
-   
-
-  useEffect(() => {
-    axios
-      .get('/api/user', { withCredentials: true })
-      .then((res) => setUser(res.data.user))
-      .catch((err:unknown) => {
-          if (err instanceof Error)
-        console.log('Not logged in', err)
-      });
-  }, []);
-
+export default function Home() {
   return (
-    <div>
-      {user ? <h2>Welcome, {user.username}</h2> : <p>You are not logged in.</p>}
-    </div>
-  );
+    <main className="min-h-screen bg-background">
+      <Navbar />
+      <Hero />
+      <Features />
+      <HowItWorks />
+      <Showcase />
+      <Pricing />
+      <BlogPreview />
+      <CTABanner />
+      <Footer />
+    </main>
+  )
 }
