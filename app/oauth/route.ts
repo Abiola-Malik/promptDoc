@@ -41,7 +41,6 @@ export async function GET(request: NextRequest) {
       await databases.createDocument(DatabaseId, usersCollectionId, user.$id, {
         username: user.name,
         email: user.email,
-        avatar: user.prefs?.avatar || "", // optional
       });
     }
 
