@@ -1,6 +1,5 @@
 // middleware.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { appwriteConfig } from './lib/appwrite/config';
 import { createSessionClient } from './lib/appwrite';
 
 export async function middleware(req: NextRequest) {
@@ -16,11 +15,14 @@ export async function middleware(req: NextRequest) {
   const { account } = await createSessionClient(sessionId);
 
   try {
-    // await account.get(); // Throws if session is invalid
+    await account.get(); // Throws if session is invalid
     return NextResponse.next();
   } catch (err) {
     console.log('[middleware] Error validating session:', err);
-    return NextResponse.redirect(new URL('/login', req.url));
+    
+    const response= NextResponse.redirect(new URL('/login', req.url));
+        response.cookies.delete('session');
+    return response;
   }
 }
 

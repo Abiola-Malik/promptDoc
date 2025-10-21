@@ -20,6 +20,7 @@ interface SignUpFormClientProps {
 }
 
 interface userProps {
+  $id?: string;
   username: string;
   email: string;
   password: string;
