@@ -26,8 +26,8 @@ const features = [
 
 export default function Features() {
   return (
-    <section id="features" className="px-4 py-20 sm:px-6 lg:px-8 bg-secondary/30">
-      <div className="mx-auto max-w-6xl">
+    <section id="features" className="px-4 py-20 sm:px-6 lg:px-8 bg-secondary/30" >
+      <div className="mx-auto max-w-6xl" data-aos="fade-up">
         <div className="mb-16 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">Powerful Features for Modern Teams</h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
