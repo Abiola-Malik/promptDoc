@@ -18,7 +18,7 @@ export const getSession = async () => {
   }
 }
 
-const checkAuthStatus = async () => {
-  const { success, session } = await getSession();
-  return success && session ? true : false;
-}
+// const checkAuthStatus = async () => {
+//   const { success, session } = await getSession();
+//   return success && session ? true : false;
+// }
