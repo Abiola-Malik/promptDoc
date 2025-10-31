@@ -4,7 +4,7 @@ import { createSessionClient } from './lib/appwrite';
 
 export async function middleware(req: NextRequest) {
   const sessionId = req.cookies.get('session')?.value;
-  console.log('Middleware: sessionId from cookie =', sessionId);
+  // console.log('Middleware: sessionId from cookie =', sessionId);
 
   // If no session cookie, redirect to login
   if (!sessionId) {

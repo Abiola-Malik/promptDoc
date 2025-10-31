@@ -41,3 +41,21 @@ interface session {
   success: boolean,
   session : string
 }
+ interface ExtractedFile {
+  path: string;
+  content: string;
+  filename: string;
+  extension: string;
+  size?: number;
+}
+
+ interface ExtractionResult {
+  success: boolean
+  files: ExtractedFile[]
+  stats: {
+    totalFiles: number
+    totalSize: number
+    skipped: number
+  }
+  error?: string
+}
