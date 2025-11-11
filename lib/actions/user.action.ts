@@ -1,8 +1,10 @@
 import { Query, ID } from 'node-appwrite';
-import { createAdminClient } from '../appwrite';
-import { appwriteConfig } from '../appwrite/config';
+import { createAdminClient, createSessionClient } from '../../db/appwrite';
+import { appwriteConfig } from '../../db/appwrite/config';
 import { cookies } from 'next/headers';
 import {  isProduction } from '../utils';
+import { userProps } from '@/types/global';
+import { getSession } from '../helpers';
 
 
 
@@ -112,5 +114,20 @@ const logOutUser = async () => {
       error: 'Failed to log out',
     };
   }
+}
+export const getUser = async (userId: string) => {
+  const sessionResult = await getSession();
+  if(!sessionResult.success){
+    throw new Error('No valid session');
+  }
+  const {databases } = await createSessionClient(sessionResult.session!);
+
+  const user = await databases.getDocument(
+    DatabaseId,
+    usersCollectionId,
+    userId
+  );
+  return user;
+
 }
 export { createNewUser, getUserByEmail, loginUser, logOutUser };
