@@ -1,7 +1,6 @@
-// app/api/auth/current-user/route.ts
 import { NextResponse } from 'next/server';
-import { createSessionClient } from '@/lib/appwrite';
-import { appwriteConfig } from '@/lib/appwrite/config';
+import { createSessionClient } from '@/db/appwrite';
+import { appwriteConfig } from '@/db/appwrite/config';
 import { Query } from 'node-appwrite';
 import { getSession } from '@/lib/helpers';
 
@@ -9,19 +8,16 @@ const { DatabaseId, usersCollectionId } = appwriteConfig;
 
 export async function GET() {
   try {
-    const {session } = await getSession()
+    const sessionResult = await getSession()
 
-    if (!session) {
-      return NextResponse.json({ error: 'No session' }, { status: 401 });
-    }
+    if (!sessionResult.success || !sessionResult.session) {
+       return NextResponse.json({ error: 'No session' }, { status: 401 });
+     }
 
-    const { account, databases } = await createSessionClient(session);
 
-    // Get Appwrite Auth user
+ const { account, databases } = await createSessionClient(sessionResult.session);
     const authUser = await account.get();
 
-    console.log('authUser', authUser);
-    // Now get the user's profile from your database
     const dbUserList = await databases.listDocuments(
       DatabaseId,
       usersCollectionId,

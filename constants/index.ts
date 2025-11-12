@@ -2,7 +2,13 @@
 const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB per file
 const MAX_TOTAL_SIZE = 100 * 1024 * 1024 // 100MB total
 const MAX_FILES = 1000 // Max files to process
+const BATCH_SIZE = 10
+const MAX_RETRIES = 3
+const RATE_LIMIT = 5
+const PINECONE_BATCH_SIZE = 100
+
 const ALLOWED_EXTENSIONS = new Set([
+
   '.ts', '.tsx', '.js', '.jsx', '.py', '.go', 
   '.java', '.rb', '.rs', '.php', '.c', '.cpp', '.txt',
   '.html', '.css', '.json', '.md', '.mdx', 
@@ -167,5 +173,5 @@ const languageMap: Record<string, string> = {
 }
 
   
-  export { MAX_FILE_SIZE, MAX_TOTAL_SIZE, MAX_FILES,  filesREGEX, ALLOWED_EXTENSIONS, languageMap, patterns };
+export { MAX_FILE_SIZE, MAX_TOTAL_SIZE, MAX_FILES,  filesREGEX, ALLOWED_EXTENSIONS, languageMap, patterns, BATCH_SIZE, MAX_RETRIES, RATE_LIMIT, PINECONE_BATCH_SIZE };
 

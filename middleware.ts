@@ -1,6 +1,6 @@
 // middleware.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { createSessionClient } from './lib/appwrite';
+import { createSessionClient } from './db/appwrite';
 
 export async function middleware(req: NextRequest) {
   const sessionId = req.cookies.get('session')?.value;

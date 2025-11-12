@@ -1,12 +1,12 @@
-import Navbar from "@/components/homepage/navbar"
-import Hero from "@/components/homepage/hero"
-import Features from "@/components/homepage/features"
-import HowItWorks from "@/components/homepage/how-it-works"
-import Showcase from "@/components/homepage/showcase"
-import Pricing from "@/components/homepage/pricing"
-import BlogPreview from "@/components/homepage/blog-preview"
-import CTABanner from "@/components/homepage/cta-banner"
-import Footer from "@/components/homepage/footer"
+import Navbar from "@/app/(home)/components/homepage/navbar"
+import Hero from "@/app/(home)/components/homepage/hero"
+import Features from "@/app/(home)/components/homepage/features"
+import HowItWorks from "@/app/(home)/components/homepage/how-it-works"
+import Showcase from "@/app/(home)/components/homepage/showcase"
+import Pricing from "@/app/(home)/components/homepage/pricing"
+import BlogPreview from "@/app/(home)/components/homepage/blog-preview"
+import CTABanner from "@/app/(home)/components/homepage/cta-banner"
+import Footer from "@/app/(home)/components/homepage/footer"
 
 export const metadata = {
   title: "PromptDoc - AI-Powered Documentation for Developers",

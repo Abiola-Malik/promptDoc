@@ -1,4 +1,5 @@
 'use server'
+import { CodeChunk } from "@/services/chunk/chunk.types";
 import { cookies } from "next/headers";
 
 export const getSession = async () => {
@@ -18,7 +19,20 @@ export const getSession = async () => {
   }
 }
 
-// const checkAuthStatus = async () => {
-//   const { success, session } = await getSession();
-//   return success && session ? true : false;
-// }
+
+/**
+ * Generate unique ID for chunk
+ */
+export async function  generateChunkId(projectId: string, chunk: CodeChunk): Promise<string> {
+  const { filename, chunkIndex } = chunk.metadata;
+  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `${projectId}-${sanitizedFilename}-chunk${chunkIndex}`;
+}
+
+/**
+ * Sleep utility for retry backoff
+ */
+export async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+

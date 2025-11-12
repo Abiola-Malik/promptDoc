@@ -1,6 +1,6 @@
-import {  createSessionClient } from "../appwrite";
+import {  createSessionClient } from "../../db/appwrite";
 import { getSession } from "../helpers";
-import { appwriteConfig } from "../appwrite/config";
+import { appwriteConfig } from "../../db/appwrite/config";
 import { ID, Query } from "node-appwrite";
 
 export const createProject = async (projectData: { title: string; description?: string }) => {
