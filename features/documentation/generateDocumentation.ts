@@ -9,8 +9,13 @@ export async function generateDocumentation(
 ): Promise<string> {
   // Embed the user's query
   const queryEmbedding = await ai.models.embedContent({
-    model: "gemini-embedding-001",
-    contents: [userQuery],
+    model: "text-embedding-004",
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: userQuery }],
+      },
+    ],
   });
 
   const queryVector = queryEmbedding?.embeddings?.[0]?.values;
@@ -29,7 +34,10 @@ export async function generateDocumentation(
 
   // Build context from relevant chunks
   const context = searchResults.matches
-    .filter(match => match.metadata?.content && typeof match.metadata.content === 'string')
+    .filter(
+      (match) =>
+        match.metadata?.content && typeof match.metadata.content === "string"
+    )
     .map(
       (match, i) => `
 === Code Snippet ${i + 1} (${match.metadata?.filename}) ===
@@ -58,5 +66,6 @@ Generate the documentation:`,
       },
     ],
   });
+
   return response.text || "No documentation generated.";
 }

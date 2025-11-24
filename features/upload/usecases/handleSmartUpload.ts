@@ -1,6 +1,7 @@
+"use server";
+
 import { generateContentHash } from "@/lib/hashing";
 import { UploadResult } from "../models/uploadResult";
-import { findExistingProject } from "@/features/projects/usecases/findExistingProject";
 import { generateDocumentation } from "@/features/documentation/generateDocumentation";
 import { index } from "@/db/pinecone";
 import path from "path";
@@ -11,10 +12,10 @@ import { embedAndStoreCodeChunks } from "@/services/embed/embedAndStore";
 import { getSession } from "@/lib/helpers";
 import { createSessionClient } from "@/db/appwrite";
 import { appwriteConfig } from "@/db/appwrite/config";
-import fs from 'fs/promises';
+import fs from "fs/promises";
+import checkExistingProject from "@/features/projects/services/checkExistingProject";
 
 const { DatabaseId, projectsCollectionId } = appwriteConfig;
-
 
 export const handleSmartUpload = async (
   userId: string,
@@ -30,21 +31,21 @@ export const handleSmartUpload = async (
     console.log(`🔍 Content hash: ${contentHash.slice(0, 16)}...`);
 
     // Step 2: Check if we've seen this exact code before
-    const existingProjectId = await findExistingProject(contentHash, userId);
+    const existingProjectId = await checkExistingProject(contentHash, userId);
 
     if (existingProjectId) {
       console.log(`✅ Found cached project: ${existingProjectId}`);
 
       // Skip extraction/embedding, just generate docs from existing data
       const documentation = await generateDocumentation(
-        existingProjectId,
+        existingProjectId.$id,
         userQuery,
         index
       );
 
       return {
         success: true,
-        projectId: existingProjectId,
+        projectId: existingProjectId.$id,
         documentation,
         cached: true,
       };
@@ -86,11 +87,18 @@ export const handleSmartUpload = async (
     const chunks: CodeChunk[] = chunkResults.flat();
 
     console.log(` Created ${chunks.length} chunks`);
+    function sanitizeId(id: string) {
+      return id
+        .replace(/[^a-zA-Z0-9._-]/g, "") // remove invalid chars
+        .slice(0, 36) // truncate to 36 chars
+        .replace(/^[._-]/, "a"); // ensure it doesn't start with special char
+    }
 
-    // Generate unique project ID
-    const projectId =generateContentHash(
+    const rawProjectId = generateContentHash(
       Buffer.from(userId + Date.now().toString())
     );
+
+    const projectId = sanitizeId(rawProjectId);
 
     // Embed and store in Pinecone
     const embedResult = await embedAndStoreCodeChunks(
@@ -122,11 +130,12 @@ export const handleSmartUpload = async (
       projectsCollectionId,
       projectId,
       {
+        name: extractionResult.files[0]?.filename || "Untitled Project",
         userId,
         contentHash,
-        createdAt: new Date().toISOString(),
-        totalFiles: extractionResult.files.length,
-        totalChunks: chunks.length,
+        // createdAt: new Date().toISOString(),
+        filesCount: extractionResult.files.length,
+        chuncksCount: chunks.length,
       }
     );
 

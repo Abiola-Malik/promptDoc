@@ -1,13 +1,10 @@
-import { Query, ID } from 'node-appwrite';
-import { createAdminClient, createSessionClient } from '../../db/appwrite';
-import { appwriteConfig } from '../../db/appwrite/config';
-import { cookies } from 'next/headers';
-import {  isProduction } from '../utils';
-import { userProps } from '@/types/global';
-import { getSession } from '../helpers';
-
-
-
+import { Query, ID } from "node-appwrite";
+import { createAdminClient, createSessionClient } from "../../db/appwrite";
+import { appwriteConfig } from "../../db/appwrite/config";
+import { cookies } from "next/headers";
+import { isProduction } from "../utils";
+import { userProps } from "@/types/global";
+import { getSession } from "../helpers";
 
 const { DatabaseId, usersCollectionId } = appwriteConfig;
 
@@ -17,10 +14,10 @@ const getUserByEmail = async (email: string) => {
   const existingUser = await databases.listDocuments(
     DatabaseId,
     usersCollectionId,
-    [Query.equal('email', email)]
+    [Query.equal("email", email)]
   );
-  if (existingUser.documents.length < 0) {
-    throw new Error('User not found');
+  if (existingUser.documents.length === 0) {
+    throw new Error("User not found");
   }
   return existingUser;
 };
@@ -28,7 +25,7 @@ const createNewUser = async ({ username, email, password }: userProps) => {
   const { databases, account } = await createAdminClient();
   const existingUser = await getUserByEmail(email);
   if (existingUser.documents.length > 0) {
-    throw new Error('User already exists, login instead');
+    throw new Error("User already exists, login instead");
   }
   const user = await account.create(ID.unique(), email, password, username);
   const userProfileDocument = await databases.createDocument(
@@ -50,21 +47,21 @@ const createNewUser = async ({ username, email, password }: userProps) => {
     status: 201,
   };
 };
-const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
+const loginUser = async ({ email, password }: Omit<userProps, "username">) => {
   const existingUser = await getUserByEmail(email);
   if (existingUser.documents.length === 0) {
     return {
       success: false,
       status: 401,
-      error: 'User not found',
+      error: "User not found",
     };
   }
   try {
     const { account } = await createAdminClient();
     const session = await account.createEmailPasswordSession(email, password);
-    (await cookies()).set('session', session.secret, {
+    (await cookies()).set("session", session.secret, {
       httpOnly: true,
-      path: '/',
+      path: "/",
       secure: isProduction,
       expires: new Date(session.expire),
     });
@@ -78,49 +75,49 @@ const loginUser = async ({ email, password }: Omit<userProps, 'username'>) => {
       },
     };
   } catch (error: unknown) {
-  if (error instanceof Error) {
-    console.error('[loginUser] Error:', error.message);
-  } else {
-    console.error('[loginUser] Unknown error:', error);
-  }
+    if (error instanceof Error) {
+      console.error("[loginUser] Error:", error.message);
+    } else {
+      console.error("[loginUser] Unknown error:", error);
+    }
 
-  return {
-    success: false,
-    status: 401,
-    error: 'Invalid credentials',
+    return {
+      success: false,
+      status: 401,
+      error: "Invalid credentials",
+    };
   }
-}
 };
 
 const logOutUser = async () => {
   // const {session} = await getSession()
   try {
     const { account } = await createAdminClient();
-    await account.deleteSession('current');
-    cookieStore.delete('session');
+    await account.deleteSession("current");
+    cookieStore.delete("session");
     return {
       success: true,
-      message: 'Logged out successfully',
+      message: "Logged out successfully",
     };
   } catch (error: unknown) {
     if (error instanceof Error) {
-      console.error('[logOutUser] Error:', error.message);
+      console.error("[logOutUser] Error:", error.message);
     } else {
-      console.error('[logOutUser] Unknown error:', error);
-    }   
+      console.error("[logOutUser] Unknown error:", error);
+    }
     return {
       success: false,
       status: 500,
-      error: 'Failed to log out',
+      error: "Failed to log out",
     };
   }
-}
+};
 export const getUser = async (userId: string) => {
   const sessionResult = await getSession();
-  if(!sessionResult.success){
-    throw new Error('No valid session');
+  if (!sessionResult.success) {
+    throw new Error("No valid session");
   }
-  const {databases } = await createSessionClient(sessionResult.session!);
+  const { databases } = await createSessionClient(sessionResult.session!);
 
   const user = await databases.getDocument(
     DatabaseId,
@@ -128,6 +125,22 @@ export const getUser = async (userId: string) => {
     userId
   );
   return user;
+};
 
-}
+export const getLoggedInUser = async () => {
+  const sessionResult = await getSession();
+  if (!sessionResult.success) {
+    throw new Error("No valid session");
+  }
+  const { databases, account } = await createSessionClient(
+    sessionResult.session!
+  );
+  const userAccount = await account.get();
+  const user = await databases.getDocument(
+    DatabaseId,
+    usersCollectionId,
+    userAccount.$id
+  );
+  return user.$id;
+};
 export { createNewUser, getUserByEmail, loginUser, logOutUser };
