@@ -9,7 +9,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 const GEMINI_MODEL = "text-embedding-004";
 const BATCH_SIZE = 100; // Gemini supports up to 100 per batch
-const CONCURRENCY = 5; // Gemini has generous rate limits
+const CONCURRENCY = 5; // Number of concurrent batch requests
 const MAX_RETRIES = 6;
 
 export const embedAndStoreCodeChunks = async (
@@ -29,7 +29,7 @@ export const embedAndStoreCodeChunks = async (
   if (chunks.length === 0) return result;
 
   console.log(
-    `🚀 Embedding ${chunks.length} code chunks with Gemini (${GEMINI_MODEL}) in batches of ${BATCH_SIZE}`
+    ` Embedding ${chunks.length} code chunks with Gemini (${GEMINI_MODEL}) in batches of ${BATCH_SIZE}`
   );
 
   // Pre-generate all IDs (parallel, fast)
@@ -168,7 +168,7 @@ export const embedAndStoreCodeChunks = async (
 
   result.success = result.failedChunks === 0;
   console.log(
-    `✅ Done! ${result.successfulChunks}/${result.totalChunks} embedded & stored`
+    ` Done! ${result.successfulChunks}/${result.totalChunks} embedded & stored`
   );
 
   return result;
