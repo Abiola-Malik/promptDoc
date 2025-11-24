@@ -9,8 +9,8 @@ export const chunkCode = async (
   options: ChunkOptions = {}
 ): Promise<CodeChunk[]> => {
   const {
-    maxChunkSize = 1000,
-    minChunkSize = 100,
+    maxChunkSize = 3000,
+    minChunkSize = 1000,
     overlap = 100,
     preserveStructure = true,
   } = options;
