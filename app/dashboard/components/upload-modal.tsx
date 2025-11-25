@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { handleSmartUpload } from "@/features/upload/usecases/handleSmartUpload";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface UploadModalProps {
