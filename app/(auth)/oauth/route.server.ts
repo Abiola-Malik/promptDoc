@@ -17,17 +17,21 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Create a temporary admin client to verify user session
     const { account } = await createAdminClient();
 
     // Create a new session using OAuth credentials
     const session = await account.createSession(userId, secret);
 
-    // Now use the session to create a user-level client
-    const { account: sessionAccount, databases } = await createSessionClient(session.secret);
+    const { account: sessionAccount, databases } = await createSessionClient(
+      session.secret
+    );
 
     // Get the authenticated user's info
     const user = await sessionAccount.get();
+
+    if (!user.email) {
+      throw new Error("OAuth provider did not return an email address");
+    }
 
     // Check if user already exists in custom users collection
     const existingUser = await databases.listDocuments(
@@ -38,11 +42,19 @@ export async function GET(request: NextRequest) {
 
     if (existingUser.total === 0) {
       // Sanitize and validate username from OAuth provider
-      let username = user.name?.replace(/[^a-zA-Z0-9_-]/g, '') || '';
+      let username = user.name?.replace(/[^a-zA-Z0-9_-]/g, "") || "";
       if (username.length < 3) {
-        username = user.email.split('@')[0].substring(0, 20);
+        username = user.email
+          .split("@")[0]
+          .replace(/[^a-zA-Z0-9_-]/g, "")
+          .substring(0, 20);
       } else if (username.length > 20) {
         username = username.substring(0, 20);
+      }
+
+      // Final validation - ensure we have a valid username
+      if (username.length < 3) {
+        username = `user_${user.$id.substring(0, 14)}`;
       }
 
       // Create a new user document
@@ -50,8 +62,7 @@ export async function GET(request: NextRequest) {
         username: username,
         email: user.email,
       });
-    }
-    //  Set session cookie
+    } //  Set session cookie
     const cookieStore = await cookies();
     cookieStore.set("session", session.secret, {
       httpOnly: true,
@@ -61,7 +72,9 @@ export async function GET(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 30, // 30 days
     });
 
-    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_APP_URL}/dashboard`);
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`
+    );
   } catch (error) {
     console.error("OAuth callback error:", error);
     return NextResponse.redirect(

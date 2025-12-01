@@ -107,7 +107,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleSend()}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
             placeholder="Ask me about your code..."
             className="bg-background border-border"
             disabled={loading}

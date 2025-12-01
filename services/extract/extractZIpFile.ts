@@ -1,17 +1,26 @@
 import path from "path";
-import { ExtractionResult, ExtractedFile} from "./extraction.types";
+import { ExtractionResult, ExtractedFile } from "./extraction.types";
 import AdmZip from "adm-zip";
 import fs from "fs/promises";
-import { ALLOWED_EXTENSIONS, filesREGEX, MAX_FILE_SIZE, MAX_FILES, MAX_TOTAL_SIZE } from "@/constants";
+import {
+  ALLOWED_EXTENSIONS,
+  filesREGEX,
+  MAX_FILE_SIZE,
+  MAX_FILES,
+  MAX_TOTAL_SIZE,
+} from "@/constants";
 import { getAllFiles } from "./getAllFiles";
 import { validateZipEntry } from "./validateZipEntry";
 import { cleanupTempDir } from "../temp/cleanTempDir";
 
-
 export const extractZipFile = async (
   filepath: string
 ): Promise<ExtractionResult> => {
-  const tempDir = path.join(process.cwd(), "temp", `extract-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+  const tempDir = path.join(
+    process.cwd(),
+    "temp",
+    `extract-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+  );
   try {
     // 1. Validate file exists
     const absolutePath = path.resolve(process.cwd(), filepath);
@@ -60,7 +69,7 @@ export const extractZipFile = async (
 
     const codeFiles = allFiles.filter((f) => {
       const ext = path.extname(f).toLowerCase();
-      return filesREGEX.test(f) && ALLOWED_EXTENSIONS.has(ext);
+      return filesREGEX.test(f) && ALLOWED_EXTENSIONS.includes(ext);
     });
 
     if (codeFiles.length === 0) {

@@ -1,26 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir, unlink } from "fs/promises";
-import path from "path";
 import { handleSmartUpload } from "@/features/upload/usecases/handleSmartUpload";
 import { getSession } from "@/lib/helpers";
 import { getLoggedInUser } from "@/lib/actions/user.action";
 
-// Configure Next.js to handle large files
+// Disable Next.js default parser for large ZIP uploads
 export const config = {
-  api: {
-    bodyParser: false, // Disable default body parser
-  },
+  api: { bodyParser: false },
 };
 
-// Increase body size limit (100MB)
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5 minutes for large uploads
+export const maxDuration = 300; // 5 minutes for large ZIPs
 
 export async function POST(request: NextRequest) {
-  let tempFilePath: string | null = null;
-
   try {
-    // 1. Verify session
+    // 1. Authentication
     const sessionResult = await getSession();
     if (!sessionResult.success || !sessionResult.session) {
       return NextResponse.json(
@@ -29,12 +22,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = await getLoggedInUser();
+    const user = await getLoggedInUser();
 
-    // 2. Parse multipart form data
+    if (!user || !user.$id) {
+      return NextResponse.json(
+        { success: false, error: "User not found" },
+        { status: 401 }
+      );
+    }
+    // 2. Parse form-data
     const formData = await request.formData();
-    const file = formData.get("file") as File;
-    const userQuery = formData.get("query") as string;
+    const file = formData.get("file") as File | null;
 
     if (!file) {
       return NextResponse.json(
@@ -43,14 +41,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!userQuery) {
-      return NextResponse.json(
-        { success: false, error: "Query is required" },
-        { status: 400 }
-      );
-    }
-
-    // 3. Validate file type
+    // 3. Validate ZIP
     if (!file.name.endsWith(".zip")) {
       return NextResponse.json(
         { success: false, error: "Only ZIP files are allowed" },
@@ -58,69 +49,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Validate file size (100MB limit)
-    const MAX_SIZE = 100 * 1024 * 1024; // 100MB
+    // 4. Validate size (100MB)
+    const MAX_SIZE = 100 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
         {
           success: false,
-          error: `File too large. Maximum size is ${MAX_SIZE / 1024 / 1024}MB`,
+          error: `File too large. Max size is ${MAX_SIZE / 1024 / 1024}MB`,
         },
         { status: 400 }
       );
     }
 
     console.log(
-      `📦 Received upload: ${file.name} (${(file.size / 1024 / 1024).toFixed(
+      `Upload received: ${file.name} (${(file.size / 1024 / 1024).toFixed(
         2
       )}MB)`
     );
 
-    // 5. Save file temporarily (streaming to avoid memory issues)
-    const tempDir = path.join(process.cwd(), "temp");
-    await mkdir(tempDir, { recursive: true });
+    // 5. Inject userId into formData
+    formData.set("userId", user.$id);
 
-    const timestamp = Date.now();
-    const randomSuffix = Math.random().toString(36).substring(7);
-    tempFilePath = path.join(
-      tempDir,
-      `upload-${timestamp}-${randomSuffix}.zip`
-    );
+    const result = await handleSmartUpload(formData);
 
-    // Stream file to disk
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(tempFilePath, buffer);
+    if (result.success) return NextResponse.json(result, { status: 200 });
 
-    console.log(`💾 Saved to: ${tempFilePath}`);
-
-    // 6. Convert temp file to File object for handleSmartUpload
-    // Create a new File from the saved buffer
-    const uploadFile = new File([buffer], file.name, { type: file.type });
-
-    // 7. Process upload with smart handler
-    const result = await handleSmartUpload(userId, uploadFile, userQuery);
-
-    // 8. Cleanup temp file
-    if (tempFilePath) {
-      await unlink(tempFilePath).catch((err) =>
-        console.error("Failed to delete temp file:", err)
-      );
-    }
-
-    // 9. Return result
-    if (result.success) {
-      return NextResponse.json(result, { status: 200 });
-    } else {
-      return NextResponse.json(result, { status: 500 });
-    }
+    return NextResponse.json(result, { status: 500 });
   } catch (error) {
-    console.error("❌ Upload API error:", error);
-
-    // Cleanup on error
-    if (tempFilePath) {
-      await unlink(tempFilePath).catch(() => {});
-    }
+    console.error(" Upload API error:", error);
 
     return NextResponse.json(
       {

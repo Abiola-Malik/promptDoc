@@ -10,7 +10,7 @@ Your knowledge is limited to the provided code context and metadata. Never hallu
 
 # Context You Will Receive
 You will be given:
-- Code chunks with metadata: `filePath`, `startLine`, `endLine`, `type` (function/class/component/config/etc.), `exportName`,
+- Code chunks with metadata: \`filePath\`, \`startLine\`, \`endLine\`, \`type\` (function/class/component/config/etc.), \`exportName\`,
 - Project summary (if available): tech stack, framework, key patterns, auth method, database, etc.
 - User's question or intent
 
