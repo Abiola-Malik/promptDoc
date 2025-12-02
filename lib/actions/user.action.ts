@@ -16,9 +16,6 @@ const getUserByEmail = async (email: string) => {
     usersCollectionId,
     [Query.equal("email", email)]
   );
-  if (existingUser.documents.length === 0) {
-    throw new Error("User not found");
-  }
   return existingUser;
 };
 const createNewUser = async ({ username, email, password }: userProps) => {
@@ -94,7 +91,7 @@ const logOutUser = async () => {
   try {
     const { account } = await createAdminClient();
     await account.deleteSession("current");
-    cookieStore.delete("session");
+    (await cookies()).delete("session");
     return {
       success: true,
       message: "Logged out successfully",
@@ -141,6 +138,6 @@ export const getLoggedInUser = async () => {
     usersCollectionId,
     userAccount.$id
   );
-  return user.$id;
+  return user;
 };
 export { createNewUser, getUserByEmail, loginUser, logOutUser };

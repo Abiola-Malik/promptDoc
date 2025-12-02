@@ -1,472 +1,484 @@
 "use client";
 
-import type React from "react";
-import { useState } from "react";
+import React, { useState, useCallback, JSX } from "react";
+import { useDropzone } from "react-dropzone";
+import JSZip from "jszip";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Upload,
+  FolderOpen,
+  FileCode2,
+  ChevronRight,
+  ChevronDown,
+  Loader2,
+  Sparkles,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 
-interface UploadModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  //   userId: string; // Add userId prop
+interface FileNode {
+  name: string;
+  path: string;
+  size?: number;
+  children?: FileNode[];
+  checked: boolean;
+  indeterminate?: boolean;
 }
 
-type UploadState = "idle" | "uploading" | "processing" | "complete" | "error";
+type UploadState =
+  | "idle"
+  | "analyzing"
+  | "ready"
+  | "uploading"
+  | "processing"
+  | "complete"
+  | "error";
 
-export function UploadModal({ open, onOpenChange }: UploadModalProps) {
+export function UploadModal({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const router = useRouter();
+
   const [state, setState] = useState<UploadState>("idle");
+  const [projectName, setProjectName] = useState("");
+  const [fileTree, setFileTree] = useState<FileNode | null>(null);
+  const [zipFile, setZipFile] = useState<File | null>(null);
+
+  const [totalFiles, setTotalFiles] = useState(0);
+  const [selectedFiles, setSelectedFiles] = useState(0);
+  const [estimatedChunks, setEstimatedChunks] = useState(0);
+
+  const [includeTests, setIncludeTests] = useState(false);
+  const [includeDotfiles, setIncludeDotfiles] = useState(false);
+
   const [progress, setProgress] = useState(0);
-  const [dragActive, setDragActive] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [userQuery, setUserQuery] = useState("");
-  const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
+  const reset = () => {
+    setState("idle");
+    setFileTree(null);
+    setProjectName("");
+    setZipFile(null);
+    setTotalFiles(0);
+    setSelectedFiles(0);
+    setEstimatedChunks(0);
+    setProgress(0);
+    setError(null);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.name.endsWith(".zip")) {
-        setSelectedFile(file);
-      } else {
-        setError("Please upload a ZIP file");
+  /**
+   * Build file-tree from ZIP
+   */
+  const onDrop = useCallback(
+    async (acceptedFiles: File[]) => {
+      const file = acceptedFiles[0];
+      if (!file || !file.name.endsWith(".zip")) {
+        setError("Please upload a .zip file");
+        return;
       }
-    }
-  };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (file.name.endsWith(".zip")) {
-        setSelectedFile(file);
-        setError(null);
-      } else {
-        setError("Please upload a ZIP file");
+      setZipFile(file);
+      setError(null);
+      setState("analyzing");
+      setProjectName(file.name.replace(".zip", ""));
+
+      try {
+        const zip = await JSZip.loadAsync(file);
+
+        const root: FileNode = {
+          name: "",
+          path: "",
+          checked: true,
+          children: [],
+        };
+
+        const files: string[] = [];
+        zip.forEach((relativePath, zipEntry) => {
+          if (!zipEntry.dir) files.push(relativePath);
+        });
+
+        // Build tree structure
+        for (const filePath of files) {
+          const parts = filePath.split("/");
+          let current = root;
+          for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            const isLast = i === parts.length - 1;
+            const fullPath = parts.slice(0, i + 1).join("/");
+
+            let node = current.children?.find((c) => c.name === part);
+            if (!node) {
+              node = {
+                name: part,
+                path: fullPath,
+                checked: true,
+                children: isLast ? undefined : [],
+              };
+              current.children = current.children || [];
+              current.children.push(node);
+            }
+            if (!isLast) current = node;
+          }
+        }
+
+        // Smart defaults
+        const toggleNode = (node: FileNode): boolean => {
+          if (!node.children) {
+            const lower = node.path.toLowerCase();
+            const shouldExclude =
+              lower.includes("node_modules") ||
+              lower.includes(".git") ||
+              lower.includes("dist") ||
+              lower.includes(".next") ||
+              lower.includes("build") ||
+              lower.endsWith(".log") ||
+              lower.includes("package-lock.json") ||
+              lower.includes("yarn.lock") ||
+              (!includeTests &&
+                (lower.includes("__tests__") ||
+                  lower.includes(".test.") ||
+                  lower.includes(".spec."))) ||
+              (!includeDotfiles && node.name.startsWith("."));
+
+            node.checked = !shouldExclude;
+            return node.checked;
+          }
+
+          node.indeterminate = false;
+          const allChecked = node.children!.every(toggleNode);
+          const someChecked = node.children!.some(
+            (c) => c.checked || c.indeterminate
+          );
+          node.checked = allChecked;
+          node.indeterminate = !allChecked && someChecked;
+          return node.checked;
+        };
+
+        root.children?.forEach(toggleNode);
+        updateCounts(root);
+        setFileTree({ ...root, name: file.name });
+        setState("ready");
+      } catch (err) {
+        console.error(err);
+        setError("Failed to read ZIP file");
+        setState("idle");
       }
+    },
+    [includeTests, includeDotfiles]
+  );
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    accept: { "application/zip": [".zip"] },
+    multiple: false,
+  });
+
+  const updateCounts = (root: FileNode) => {
+    let total = 0;
+    let selected = 0;
+
+    const traverse = (node: FileNode) => {
+      if (!node.children) {
+        total++;
+        if (node.checked) selected++;
+        return;
+      }
+      node.children!.forEach(traverse);
+    };
+
+    root.children?.forEach(traverse);
+
+    setTotalFiles(total);
+    setSelectedFiles(selected);
+    setEstimatedChunks(Math.round(selected * 2.8));
+  };
+
+  const toggleNode = (node: FileNode, checked: boolean) => {
+    node.checked = checked;
+    node.indeterminate = false;
+    if (node.children) {
+      node.children.forEach((child) => toggleNode(child, checked));
+    }
+    if (fileTree) {
+      updateCounts(fileTree);
+      setFileTree({ ...fileTree });
     }
   };
 
+  const renderTree = (node: FileNode, depth = 0): JSX.Element => {
+    if (!node.children) {
+      return (
+        <div key={node.path} className="flex items-center gap-2 py-1 pl-8">
+          <Checkbox
+            checked={node.checked}
+            onCheckedChange={(checked) => {
+              node.checked = checked as boolean;
+              if (fileTree) {
+                updateCounts(fileTree);
+                setFileTree({ ...fileTree });
+              }
+            }}
+          />
+          <FileCode2 className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm text-foreground">{node.name}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div key={node.path} className={depth > 0 ? "ml-4" : ""}>
+        <div className="flex items-center gap-2 py-1 hover:bg-muted/50 rounded-md px-2 -ml-2">
+          <Checkbox
+            checked={node.checked}
+            onCheckedChange={(checked) => toggleNode(node, checked as boolean)}
+          />
+          {(node.children?.length ?? 0) > 0 ? (
+            node.checked || node.indeterminate ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )
+          ) : (
+            <FolderOpen className="w-4 h-4 text-primary" />
+          )}
+          <span className="text-sm font-medium text-foreground">
+            {node.name || "root"}
+          </span>
+        </div>
+        {(node.checked || node.indeterminate) &&
+          node.children &&
+          node.children.map((child) => renderTree(child, depth + 1))}
+      </div>
+    );
+  };
+
+  /**
+   * REAL UPLOAD FLOW (SmartUpload)
+   */
   const handleUpload = async () => {
-    if (!selectedFile) {
-      setError("Please select a file");
-      return;
-    }
-
-    if (!userQuery.trim()) {
-      setError("Please enter what documentation you need");
+    if (!zipFile) {
+      setError("No ZIP file selected");
       return;
     }
 
     setState("uploading");
-    setError(null);
-    setProgress(0);
-
-    // Start progress simulation
-    const progressInterval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) return prev;
-        return prev + 3;
+    setProgress(10);
+    const getSelectedPaths = (node: FileNode): string[] => {
+      if (!node.children) {
+        return node.checked ? [node.path] : [];
+      }
+      let paths: string[] = [];
+      node.children.forEach((child) => {
+        paths = paths.concat(getSelectedPaths(child));
       });
-    }, 800);
+      return paths;
+    };
+    const formData = new FormData();
+    formData.append("file", zipFile);
+    formData.append("name", projectName);
+    formData.append("includeTests", String(includeTests));
+    formData.append("includeDotfiles", String(includeDotfiles));
+    formData.append(
+      "selectedFiles",
+      JSON.stringify(getSelectedPaths(fileTree!))
+    );
 
     try {
-      // Create FormData for file upload
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append("query", userQuery);
-
-      // Call API route instead of server action
-      const response = await fetch("/api/upload", {
+      const res = await fetch("/api/upload", {
         method: "POST",
         body: formData,
       });
 
-      const uploadResult = await response.json();
+      if (!res.ok) {
+        const errJSON = await res.json();
+        throw new Error(errJSON.error || "Upload failed");
+      }
 
-      clearInterval(progressInterval);
+      const data = await res.json();
 
-      if (response.ok && uploadResult.success) {
+      setProgress(90);
+      setState("processing");
+
+      // Redirect to project page
+      setTimeout(() => {
         setProgress(100);
         setState("complete");
-        setResult(uploadResult);
+
+        setTimeout(() => {
+          router.push(`/dashboard/project/${data.projectId}`);
+          onOpenChange(false);
+        }, 800);
+      }, 1200);
+    } catch (err: unknown) {
+      if (!(err instanceof Error)) return;
+      if (err.message.includes("Unauthorized")) {
+        setError("Session expired. Please log in again.");
       } else {
-        setState("error");
-        setError(uploadResult.error || `Upload failed: ${response.statusText}`);
+        setError(err.message);
       }
-    } catch (err) {
-      clearInterval(progressInterval);
+      console.error(err);
+      setError(err.message);
       setState("error");
-      setError(err instanceof Error ? err.message : "Network error occurred");
-      console.error("Upload error:", err);
     }
   };
-
-  const resetModal = () => {
-    setState("idle");
-    setProgress(0);
-    setSelectedFile(null);
-    setUserQuery("");
-    setResult(null);
-    setError(null);
-  };
-
-  const handleClose = () => {
-    resetModal();
-    onOpenChange(false);
-  };
-
-  const getStepStatus = (stepIndex: number) => {
-    if (state === "error") return "error";
-    if (state === "idle") return "pending";
-
-    const progressThresholds = [0, 30, 60, 100];
-    if (progress >= progressThresholds[stepIndex]) {
-      return state === "complete" && stepIndex === 3 ? "complete" : "active";
-    }
-    return "pending";
-  };
-
-  const steps = [
-    { label: "Extracting files", threshold: 0 },
-    { label: "Chunking code", threshold: 30 },
-    { label: "Generating embeddings", threshold: 60 },
-    { label: "Creating documentation", threshold: 90 },
-  ];
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) reset();
+        onOpenChange(o);
+      }}
+    >
+      <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Upload New Project</DialogTitle>
+          <DialogTitle className="text-2xl">Create New Project</DialogTitle>
           <DialogDescription>
-            {state === "idle"
-              ? "Choose how you want to add your project"
-              : state === "complete"
-              ? "Your documentation is ready!"
-              : state === "error"
-              ? "Upload failed"
-              : result?.cached
-              ? "Using cached project data"
-              : "Processing your code..."}
+            {state === "idle" && "Upload your codebase as a ZIP file"}
+            {state === "analyzing" && "Analyzing your project..."}
+            {state === "ready" &&
+              `${selectedFiles} of ${totalFiles} files selected (~${estimatedChunks} chunks)`}
+            {state === "uploading" && "Uploading..."}
+            {state === "processing" && "Processing your project..."}
+            {state === "complete" && "Your project is ready!"}
+            {state === "error" && "Something went wrong"}
           </DialogDescription>
         </DialogHeader>
 
-        {state === "idle" ? (
-          <Tabs defaultValue="upload" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="upload">Upload ZIP</TabsTrigger>
-              <TabsTrigger value="github" disabled>
-                GitHub
-              </TabsTrigger>
-            </TabsList>
+        {/** Idle + analyzing */}
+        {state === "idle" || state === "analyzing" ? (
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-xl p-12 text-center cursor-pointer transition-all ${
+              isDragActive
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-primary/50"
+            }`}
+          >
+            <input {...getInputProps()} />
+            <Upload className="w-16 h-16 mx-auto mb-4 text-primary" />
+            <p className="text-lg font-medium text-foreground">
+              {isDragActive
+                ? "Drop your ZIP here"
+                : "Drag & drop your project ZIP"}
+            </p>
+            <p className="text-sm text-muted-foreground mt-2">
+              or click to browse
+            </p>
+            <Button className="mt-6" size="lg">
+              Choose ZIP File
+            </Button>
+          </div>
+        ) : null}
 
-            <TabsContent value="upload" className="space-y-4">
-              {/* Query Input */}
-              <div className="space-y-2">
-                <Label htmlFor="query" className="text-sm font-medium">
-                  What documentation do you need?
-                </Label>
-                <Input
-                  id="query"
-                  placeholder="e.g., API documentation for authentication system"
-                  value={userQuery}
-                  onChange={(e) => setUserQuery(e.target.value)}
-                  className="bg-card border-border"
-                />
-              </div>
-
-              {/* File Upload Area */}
-              <div
-                onDragEnter={handleDrag}
-                onDragLeave={handleDrag}
-                onDragOver={handleDrag}
-                onDrop={handleDrop}
-                className={`
-                  border-2 border-dashed rounded-lg p-8 text-center transition-colors
-                  ${
-                    dragActive
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:border-primary/50"
-                  }
-                `}
-              >
-                <svg
-                  className="w-12 h-12 mx-auto mb-3 text-muted-foreground"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6"
-                  />
-                </svg>
-
-                {selectedFile ? (
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-foreground">
-                      {selectedFile.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedFile(null)}
-                    >
-                      Change File
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-sm font-medium text-foreground mb-1">
-                      Drag and drop your ZIP file here
-                    </p>
-                    <p className="text-xs text-muted-foreground mb-4">
-                      or click to browse
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        document.getElementById("file-input")?.click()
-                      }
-                    >
-                      Browse Files
-                    </Button>
-                  </>
-                )}
-
-                <input
-                  id="file-input"
-                  type="file"
-                  accept=".zip"
-                  className="hidden"
-                  onChange={handleFileSelect}
-                />
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                  <AlertCircle className="h-4 w-4 text-destructive" />
-                  <p className="text-sm text-destructive">{error}</p>
-                </div>
-              )}
-
-              <Button
-                onClick={handleUpload}
-                disabled={!selectedFile || !userQuery.trim()}
-                className="w-full bg-primary hover:bg-primary/90"
-              >
-                Generate Documentation
-              </Button>
-            </TabsContent>
-
-            <TabsContent value="github" className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  GitHub Repository URL
-                </Label>
-                <Input
-                  placeholder="https://github.com/username/repo"
-                  className="bg-card border-border"
-                  disabled
-                />
-              </div>
-              <Button disabled className="w-full">
-                Coming Soon
-              </Button>
-            </TabsContent>
-          </Tabs>
-        ) : (
-          <div className="space-y-6 py-4">
-            {/* Progress Steps */}
-            <div className="space-y-3">
-              {steps.map((step, index) => {
-                const status = getStepStatus(index);
-
-                return (
-                  <div key={step.label} className="flex items-center gap-3">
-                    <div
-                      className={`
-                        w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all
-                        ${
-                          status === "active" || status === "complete"
-                            ? "bg-primary text-primary-foreground"
-                            : status === "error"
-                            ? "bg-destructive text-destructive-foreground"
-                            : "bg-muted text-muted-foreground"
-                        }
-                      `}
-                    >
-                      {status === "active" ? (
-                        <svg
-                          className="w-4 h-4 animate-spin"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
-                      ) : status === "complete" ? (
-                        <CheckCircle2 className="w-4 h-4" />
-                      ) : status === "error" ? (
-                        <AlertCircle className="w-4 h-4" />
-                      ) : (
-                        index + 1
-                      )}
-                    </div>
-                    <span className="text-sm font-medium text-foreground">
-                      {step.label}
-                    </span>
-                  </div>
-                );
-              })}
+        {/** Preview + ready */}
+        {state === "ready" && (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label>Project Name</Label>
+              <Input
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="My Awesome App"
+                className="text-lg"
+              />
             </div>
 
-            {/* Cached Project Notice */}
-            {result?.cached && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <p className="text-sm text-primary font-medium">
-                  Using cached data - instant response!
-                </p>
-              </div>
-            )}
+            <div className="flex gap-6 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={includeTests}
+                  onCheckedChange={(c) => setIncludeTests(c as boolean)}
+                />
+                <span>Include tests</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={includeDotfiles}
+                  onCheckedChange={(c) => setIncludeDotfiles(c as boolean)}
+                />
+                <span>Include dotfiles</span>
+              </label>
+            </div>
 
-            {/* Error Display */}
-            {state === "error" && error && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                <AlertCircle className="h-4 w-4 text-destructive mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-destructive">
-                    Upload Failed
-                  </p>
-                  <p className="text-xs text-destructive/80 mt-1">{error}</p>
-                </div>
+            <div className="border rounded-lg p-4 bg-muted/30 max-h-96 overflow-y-auto">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <span className="font-medium">Smart file selection</span>
               </div>
-            )}
+              {fileTree && renderTree(fileTree)}
+            </div>
 
-            {/* Progress Bar */}
-            {state !== "complete" && state !== "error" && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="text-foreground font-medium">
-                    {progress}%
-                  </span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
+            <div className="flex justify-between items-center pt-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Estimated:{" "}
+                <span className="font-medium text-foreground">
+                  {estimatedChunks}
+                </span>{" "}
+                code chunks
               </div>
-            )}
+              <Button
+                size="lg"
+                onClick={handleUpload}
+                disabled={selectedFiles === 0}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Process Project
+              </Button>
+            </div>
+          </div>
+        )}
 
-            {/* Stats Display */}
-            {result?.stats && state === "complete" && (
-              <div className="grid grid-cols-3 gap-3 p-3 rounded-lg bg-muted/50">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">
-                    {result.stats.filesProcessed}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Files</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">
-                    {result.stats.chunksCreated}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Chunks</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">
-                    {result.stats.embeddingsStored}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Embeddings</p>
-                </div>
-              </div>
-            )}
+        {/** Uploading / Processing */}
+        {(state === "uploading" || state === "processing") && (
+          <div className="space-y-8 py-8">
+            <div className="text-center">
+              <Loader2 className="w-16 h-16 mx-auto animate-spin text-primary" />
+              <p className="text-lg font-medium mt-4">
+                {state === "uploading"
+                  ? "Uploading your code..."
+                  : "Processing your codebase..."}
+              </p>
+            </div>
+            <Progress value={progress} className="h-3" />
+          </div>
+        )}
 
-            {/* Action Buttons */}
-            {state === "complete" && (
-              <div className="space-y-2">
-                <Button
-                  className="w-full bg-primary hover:bg-primary/90"
-                  onClick={() => {
-                    // Navigate to project or view documentation
-                    window.location.href = `/projects/${result.projectId}`;
-                  }}
-                >
-                  View Documentation
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleClose}
-                >
-                  Close
-                </Button>
-              </div>
-            )}
+        {/** Complete */}
+        {state === "complete" && (
+          <div className="text-center py-12 space-y-6">
+            <div className="w-20 h-20 mx-auto bg-primary/10 rounded-full flex items-center justify-center">
+              <CheckCircle2 className="w-12 h-12 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-bold">Project ready!</h3>
+              <p className="text-muted-foreground mt-2">
+                Redirecting to your dashboard...
+              </p>
+            </div>
+          </div>
+        )}
 
-            {state === "error" && (
-              <div className="space-y-2">
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={resetModal}
-                >
-                  Try Again
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full"
-                  onClick={handleClose}
-                >
-                  Cancel
-                </Button>
-              </div>
-            )}
+        {error && (
+          <div className="flex items-center gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+            <AlertCircle className="w-5 h-5 text-destructive" />
+            <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
       </DialogContent>

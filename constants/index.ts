@@ -8,7 +8,7 @@ const MAX_RETRIES = 5;
 const RATE_LIMIT = 25;
 const PINECONE_BATCH_SIZE = 100;
 
-const ALLOWED_EXTENSIONS = new Set([
+const ALLOWED_EXTENSIONS = [
   ".ts",
   ".tsx",
   ".js",
@@ -33,7 +33,7 @@ const ALLOWED_EXTENSIONS = new Set([
   ".sh",
   ".bash",
   ".zsh",
-]);
+];
 
 const languageMap: Record<string, string> = {
   ts: "typescript",

@@ -67,9 +67,11 @@ Main content area for displaying data.
           }
           if (line.startsWith("- ")) {
             return (
-              <li key={index} className="text-foreground ml-4 my-1">
-                {line.replace("- ", "")}
-              </li>
+              <ul key={index} className="list-disc ml-6 my-2">
+                <li key={index} className="text-foreground ml-4 my-1">
+                  {line.replace("- ", "")}
+                </li>
+              </ul>
             );
           }
           if (line.startsWith("```")) {
