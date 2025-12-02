@@ -1,10 +1,10 @@
 "use client";
 
-interface DocsViewerProps {
-  projectId: string;
-}
+// interface DocsViewerProps {
+//   projectId: string;
+// }
 
-export function DocsViewer({ projectId }: DocsViewerProps) {
+export function DocsViewer() {
   const sampleMarkdown = `# React Dashboard Documentation
 
 ## Overview

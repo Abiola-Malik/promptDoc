@@ -1,4 +1,4 @@
-export function FilesExplorer({ projectId }: { projectId: string }) {
+export function FilesExplorer() {
   return (
     <div className="p-8">
       <div className="bg-card rounded-xl border border-border p-12 text-center">
