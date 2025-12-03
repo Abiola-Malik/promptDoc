@@ -12,11 +12,11 @@ interface Message {
   timestamp: Date;
 }
 
-interface ChatPanelProps {
-  projectId: string;
-}
+// interface ChatPanelProps {
+//   projectId: string;
+// }
 
-export function ChatPanel({ projectId }: ChatPanelProps) {
+export function ChatPanel() {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
