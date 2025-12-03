@@ -56,8 +56,10 @@ export const embedAndStoreCodeChunks = async (
           try {
             // Create batch embedding requests
             const requests = batch.map((b) => ({
-              content: { parts: [{ text: b.chunk.content }] },
-              taskType: "RETRIEVAL_DOCUMENT" as const,
+              content: {
+                role: "user" as const,
+                parts: [{ text: b.chunk.content }],
+              },
             }));
 
             // Use batchEmbedContents for async batching
