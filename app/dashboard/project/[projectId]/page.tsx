@@ -130,7 +130,7 @@ export default function ProjectPage({
           {/* Tab Content */}
           <div className="flex-1 overflow-hidden bg-muted/20">
             <TabsContent value="chat" className="h-full m-0">
-              <ChatPanel projectId={awaitedParams.projectId} />
+              <ChatPanel />
             </TabsContent>
 
             <TabsContent value="docs" className="h-full m-0">
@@ -149,12 +149,12 @@ export default function ProjectPage({
                   </div>
                 </div>
               ) : (
-                <DocsViewer projectId={awaitedParams.projectId} />
+                <DocsViewer />
               )}
             </TabsContent>
 
             <TabsContent value="files" className="h-full m-0">
-              <FilesExplorer projectId={awaitedParams.projectId} />
+              <FilesExplorer />
             </TabsContent>
           </div>
         </Tabs>
