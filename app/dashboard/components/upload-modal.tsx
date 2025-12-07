@@ -150,6 +150,9 @@ export function UploadModal({
               lower.endsWith(".log") ||
               lower.includes("package-lock.json") ||
               lower.includes("yarn.lock") ||
+              lower.includes("pnpm-lock.yaml") ||
+              lower.includes(".DS_Store") ||
+              lower.includes("public/") ||
               (!includeTests &&
                 (lower.includes("__tests__") ||
                   lower.includes(".test.") ||

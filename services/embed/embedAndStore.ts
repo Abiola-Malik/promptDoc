@@ -106,7 +106,9 @@ export const embedAndStoreCodeChunks = async (
 
             // Upsert to Pinecone in sub-batches of 100
             for (let j = 0; j < vectors.length; j += 100) {
-              await pineconeIndex.upsert(vectors.slice(j, j + 100));
+              await pineconeIndex
+                .namespace(projectId)
+                .upsert(vectors.slice(j, j + 100));
             }
 
             result.successfulChunks += vectors.length;

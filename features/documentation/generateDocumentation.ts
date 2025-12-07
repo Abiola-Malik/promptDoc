@@ -24,11 +24,11 @@ export async function generateDocumentation(
     throw new Error("Failed to embed query");
   }
 
+  const namespace = pineconeIndex.namespace(projectId);
   // Search Pinecone for similar code chunks
-  const searchResults = await pineconeIndex.query({
+  const searchResults = await namespace.query({
     vector: queryVector,
-    topK: 5,
-    filter: { projectId },
+    topK: 10,
     includeMetadata: true,
   });
 

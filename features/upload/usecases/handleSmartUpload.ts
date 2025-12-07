@@ -151,6 +151,9 @@ export async function handleSmartUpload(
 
   // 7. Cleanup
   await fs.unlink(tempPath);
+  await databases.updateDocument(DatabaseId, projectsCollectionId, projectId, {
+    status: "ready",
+  });
 
   return {
     success: true,

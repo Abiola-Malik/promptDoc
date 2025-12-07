@@ -13,13 +13,13 @@ export const fileUpload = async (
 ) => {
   const buffer = await zipFile.arrayBuffer();
   const contentHash = generateContentHash(Buffer.from(buffer));
-  console.log(`🔍 Content hash: ${contentHash.slice(0, 16)}...`);
+  console.log(`Content hash: ${contentHash.slice(0, 16)}...`);
 
   // Step 2: Check if we've seen this exact code before
   const existingProjectId = await checkExistingProject(contentHash, userId);
 
   if (existingProjectId) {
-    console.log(`✅ Found cached project: ${existingProjectId}`);
+    console.log(`Found cached project: ${existingProjectId}`);
 
     // Skip extraction/embedding, just generate docs from existing data
     const documentation = await generateDocumentation(
