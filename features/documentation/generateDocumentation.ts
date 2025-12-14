@@ -5,7 +5,8 @@ import { Pinecone } from "@pinecone-database/pinecone";
 export async function generateDocumentation(
   projectId: string,
   userQuery: string,
-  pineconeIndex: ReturnType<Pinecone["index"]>
+  pineconeIndex: ReturnType<Pinecone["index"]>,
+  onChunk?: (chunk: string) => void
 ): Promise<string> {
   // Embed the user's query
   const queryEmbedding = await ai.models.embedContent({
@@ -47,8 +48,11 @@ ${String(match.metadata?.content).slice(0, 5000)}
     )
     .join("\n\n");
   // Generate documentation with Gemini
-  const response = await ai.models.generateContent({
-    model: "gemini-2.0-flash-exp",
+  const response = await ai.models.generateContentStream({
+    model: "gemini-2.0-flash",
+    generationConfig: {
+      responseMimeType: "text/plain",
+    },
     contents: [
       {
         role: "user",
@@ -67,5 +71,14 @@ Generate the documentation:`,
     ],
   });
 
-  return response.text || "No documentation generated.";
+  let fullText = "";
+  for await (const chunk of response) {
+    const chunkText = chunk.text;
+    if (chunkText) {
+      fullText += chunkText;
+      onChunk?.(chunkText); // Call the callback with each chunk
+    }
+  }
+
+  return fullText || "No documentation generated.";
 }
