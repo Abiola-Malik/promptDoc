@@ -187,7 +187,9 @@ export function DocsViewer({ projectId }: { projectId: string }) {
                         </Button>
                       </div>
                       <SyntaxHighlighter
-                        style={vscDarkPlus}
+                        style={
+                          vscDarkPlus as { [key: string]: React.CSSProperties }
+                        }
                         language={match[1]}
                         PreTag="div"
                         customStyle={{
@@ -198,7 +200,6 @@ export function DocsViewer({ projectId }: { projectId: string }) {
                           fontSize: "0.9375rem",
                           padding: "1.5rem",
                         }}
-                        {...props}
                       >
                         {codeString}
                       </SyntaxHighlighter>

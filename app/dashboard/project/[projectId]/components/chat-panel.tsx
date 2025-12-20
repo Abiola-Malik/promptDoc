@@ -107,6 +107,72 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
     }
   };
 
+  // Shared markdown components
+  const markdownComponents = {
+    code({ inline, className, children, ...props }: CodeProps) {
+      const match = /language-(\w+)/.exec(className || "");
+      const codeString = String(children).replace(/\n$/, "");
+
+      if (!inline && match) {
+        return (
+          <div className="relative my-6 -mx-6">
+            <div className="flex items-center justify-between rounded-t-xl bg-muted/80 px-4 py-2.5 border border-b-0 border-border">
+              <div className="flex items-center gap-2">
+                <FileCode2 className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                  {match[1]}
+                </span>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-3"
+                onClick={() =>
+                  copyToClipboard(codeString, `code-${Date.now()}`)
+                }
+              >
+                {copiedId === `code-${Date.now()}` ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    <span className="text-xs ml-1">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span className="text-xs ml-1">Copy</span>
+                  </>
+                )}
+              </Button>
+            </div>
+            <SyntaxHighlighter
+              style={vscDarkPlus as { [key: string]: React.CSSProperties }}
+              language={match[1]}
+              PreTag="div"
+              customStyle={{
+                margin: 0,
+                borderRadius: 0,
+                borderBottomLeftRadius: "0.75rem",
+                borderBottomRightRadius: "0.75rem",
+                fontSize: "0.875rem",
+              }}
+            >
+              {codeString}
+            </SyntaxHighlighter>
+          </div>
+        );
+      }
+
+      return (
+        <code
+          className="rounded bg-black/20 px-2 py-1 text-sm font-medium"
+          {...props}
+        >
+          {children}
+        </code>
+      );
+    },
+  };
+
   return (
     <div className="flex h-full flex-col ">
       {/* Scrollable Messages */}
@@ -179,96 +245,13 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                         <div className="prose prose-sm dark:prose-invert max-w-none">
                           <ReactMarkdown
                             remarkPlugins={[remarkGfm]}
-                            components={{
-                              code({
-                                inline,
-                                className,
-                                children,
-                                ...props
-                              }: CodeProps) {
-                                const match = /language-(\w+)/.exec(
-                                  className || ""
-                                );
-                                const codeString = String(children).replace(
-                                  /\n$/,
-                                  ""
-                                );
-
-                                if (!inline && match) {
-                                  return (
-                                    <div className="relative my-6 -mx-6">
-                                      <div className="flex items-center justify-between rounded-t-xl bg-muted/80 px-4 py-2.5 border border-b-0 border-border">
-                                        <div className="flex items-center gap-2">
-                                          <FileCode2 className="w-4 h-4 text-muted-foreground" />
-                                          <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                                            {match[1]}
-                                          </span>
-                                        </div>
-                                        <Button
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-8 px-3"
-                                          onClick={() =>
-                                            copyToClipboard(
-                                              codeString,
-                                              `${msg.id}-${match[1]}`
-                                            )
-                                          }
-                                        >
-                                          {copiedId ===
-                                          `${msg.id}-${match[1]}` ? (
-                                            <>
-                                              <CheckCircle2 className="w-4 h-4 text-green-500" />
-                                              <span className="text-xs ml-1">
-                                                Copied!
-                                              </span>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <Copy className="w-4 h-4" />
-                                              <span className="text-xs ml-1">
-                                                Copy
-                                              </span>
-                                            </>
-                                          )}
-                                        </Button>
-                                      </div>
-                                      <SyntaxHighlighter
-                                        style={vscDarkPlus}
-                                        language={match[1]}
-                                        PreTag="div"
-                                        customStyle={{
-                                          margin: 0,
-                                          borderRadius: 0,
-                                          borderBottomLeftRadius: "0.75rem",
-                                          borderBottomRightRadius: "0.75rem",
-                                          fontSize: "0.875rem",
-                                        }}
-                                        {...props}
-                                      >
-                                        {codeString}
-                                      </SyntaxHighlighter>
-                                    </div>
-                                  );
-                                }
-
-                                return (
-                                  <code
-                                    className="rounded bg-black/20 px-2 py-1 text-sm font-medium"
-                                    {...props}
-                                  >
-                                    {children}
-                                  </code>
-                                );
-                              },
-                              // Keep other components as in your code
-                            }}
+                            components={markdownComponents}
                           >
                             {msg.content}
                           </ReactMarkdown>
 
                           {/* Sources */}
-                          {msg.sources?.length && msg.sources.length > 0 && (
+                          {msg.sources && msg.sources.length > 0 && (
                             <div className="mt-6 pt-6 border-t border-border/50">
                               <p className="mb-3 text-sm font-semibold text-muted-foreground">
                                 Sources ({msg.sources.length})
@@ -324,11 +307,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                       <div className="prose prose-sm dark:prose-invert max-w-none">
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm]}
-                          components={
-                            {
-                              /* same as above */
-                            }
-                          }
+                          components={markdownComponents}
                         >
                           {streamingMessage}
                         </ReactMarkdown>
