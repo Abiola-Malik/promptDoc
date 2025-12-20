@@ -1,193 +1,112 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ChevronDown,
-  ChevronRight,
-  Folder,
-  FileCode,
-  Search,
-} from "lucide-react";
+import { File, Folder, Search, ChevronRight, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { FileNode, useFileStore } from "@/stores/FileStore";
 
-interface FileNode {
-  name: string;
-  type: "file" | "folder";
-  children?: FileNode[];
-  language?: string;
+interface FileTreeProps {
+  nodes: FileNode[];
+  level?: number;
 }
 
-const mockFiles: FileNode[] = [
-  {
-    name: "src",
-    type: "folder",
-    children: [
-      {
-        name: "app",
-        type: "folder",
-        children: [
-          { name: "page.tsx", type: "file", language: "tsx" },
-          { name: "layout.tsx", type: "file", language: "tsx" },
-          {
-            name: "dashboard",
-            type: "folder",
-            children: [
-              { name: "page.tsx", type: "file", language: "tsx" },
-              {
-                name: "components",
-                type: "folder",
-                children: [
-                  { name: "project-header.tsx", type: "file", language: "tsx" },
-                  { name: "chat-panel.tsx", type: "file", language: "tsx" },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      {
-        name: "components",
-        type: "folder",
-        children: [
-          {
-            name: "ui",
-            type: "folder",
-            children: [
-              { name: "button.tsx", type: "file", language: "tsx" },
-              { name: "textarea.tsx", type: "file", language: "tsx" },
-            ],
-          },
-          { name: "chat-panel.tsx", type: "file", language: "tsx" },
-          { name: "docs-viewer.tsx", type: "file", language: "tsx" },
-        ],
-      },
-      {
-        name: "lib",
-        type: "folder",
-        children: [
-          { name: "gemini.ts", type: "file", language: "ts" },
-          { name: "pinecone.ts", type: "file", language: "ts" },
-          { name: "appwrite.ts", type: "file", language: "ts" },
-        ],
-      },
-      {
-        name: "hooks",
-        type: "folder",
-        children: [
-          { name: "useChat.ts", type: "file", language: "ts" },
-          { name: "useProject.ts", type: "file", language: "ts" },
-        ],
-      },
-    ],
-  },
-  { name: "package.json", type: "file", language: "json" },
-  { name: "tailwind.config.ts", type: "file", language: "ts" },
-  { name: "next.config.mjs", type: "file", language: "js" },
-];
-
-function FileTree({ nodes, depth = 0 }: { nodes: FileNode[]; depth?: number }) {
-  const [expanded, setExpanded] = useState<Set<string>>(
-    new Set(["src", "src/app", "src/components"])
-  );
-
-  const toggle = (name: string) => {
-    setExpanded((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(name)) newSet.delete(name);
-      else newSet.add(name);
-      return newSet;
-    });
-  };
+function FileTree({ nodes, level = 0 }: FileTreeProps) {
+  const toggleFolder = useFileStore((state) => state.toggleFolder);
+  const openFile = useFileStore((state) => state.openFile);
 
   return (
-    <div className={depth > 0 ? "ml-4" : ""}>
-      {nodes.map((node) => {
-        const key = `${depth}-${node.name}`;
-        const isExpanded = expanded.has(key);
-
-        return (
-          <div key={key}>
-            <div
-              className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer select-none"
-              onClick={() => node.type === "folder" && toggle(key)}
-            >
-              {node.type === "folder" ? (
-                isExpanded ? (
-                  <ChevronDown className="w-4 h-4 text-muted-foreground" />
+    <div className={cn("ml-4", level > 0 && "border-l border-border/50 pl-2")}>
+      {nodes.map((node) => (
+        <div key={node.path}>
+          {node.type === "folder" ? (
+            <>
+              <button
+                onClick={() => toggleFolder(node.path)}
+                className="flex items-center gap-2 w-full py-1 text-sm hover:bg-muted/50 rounded-md px-2"
+              >
+                {node.isOpen ? (
+                  <ChevronDown className="w-4 h-4" />
                 ) : (
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                )
-              ) : (
-                <div className="w-4" />
-              )}
-              {node.type === "folder" ? (
-                <Folder className="w-4 h-4 text-primary/80" />
-              ) : (
-                <FileCode className="w-4 h-4 text-muted-foreground" />
-              )}
-              <span className="text-sm font-medium text-foreground">
+                  <ChevronRight className="w-4 h-4" />
+                )}
+                <Folder className="w-4 h-4 text-primary" />
                 {node.name}
-              </span>
-              {node.language && (
-                <span className="ml-auto text-xs text-muted-foreground font-mono">
-                  {node.language}
-                </span>
+              </button>
+              {node.isOpen && node.children && (
+                <FileTree nodes={node.children} level={level + 1} />
               )}
-            </div>
-
-            {node.type === "folder" && isExpanded && node.children && (
-              <div className="border-l border-border/50 ml-2 pl-4">
-                <FileTree nodes={node.children} depth={depth + 1} />
-              </div>
-            )}
-          </div>
-        );
-      })}
+            </>
+          ) : (
+            <button
+              onClick={() => openFile(node.path)}
+              className="flex items-center gap-2 w-full py-1 text-sm hover:bg-muted/50 rounded-md px-2"
+            >
+              <File className="w-4 h-4 text-muted-foreground" />
+              {node.name}
+            </button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
 
 export function FilesExplorer({ projectId }: { projectId: string }) {
+  const files = useFileStore((state) => state.files);
   const [search, setSearch] = useState("");
+  console.log("Project ID in FilesExplorer:", projectId);
+
+  const filterTree = (nodes: FileNode[], query: string): FileNode[] => {
+    return nodes
+      .map((node) => {
+        if (node.type === "folder" && node.children) {
+          const filteredChildren = filterTree(node.children, query);
+          if (
+            filteredChildren.length > 0 ||
+            node.name.toLowerCase().includes(query)
+          ) {
+            return {
+              ...node,
+              children: filteredChildren,
+              isOpen: filteredChildren.length > 0,
+            };
+          }
+          return null;
+        }
+        return node.name.toLowerCase().includes(query) ? node : null;
+      })
+      .filter((node): node is FileNode => node !== null);
+  };
+
+  const filteredFiles = search
+    ? filterTree(files, search.toLowerCase())
+    : files;
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Files</h2>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search files..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-muted/50 border-border"
-            />
-          </div>
+      <div className="p-4 border-b border-border">
+        <div className="relative">
+          <Input
+            placeholder="Search files..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl pl-10"
+          />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
         </div>
       </div>
-
-      {/* Tree */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-4">
-          {search ? (
-            <p className="text-center text-muted-foreground py-8">
-              Search coming soon
+      <div className="flex-1 overflow-y-auto p-4">
+        {filteredFiles.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center space-y-2">
+            <Folder className="w-12 h-12 text-muted-foreground/50" />
+            <p className="text-sm text-muted-foreground">
+              {search ? "No files found" : "No files yet"}
             </p>
-          ) : (
-            <FileTree nodes={mockFiles} />
-          )}
-        </div>
-      </div>
-
-      {/* Footer Stats */}
-      <div className="border-t border-border px-6 py-3 text-xs text-muted-foreground">
-        <div className="flex items-center justify-between">
-          <span>24 files</span>
-          <span>8 folders</span>
-          <span>TypeScript • React</span>
-        </div>
+          </div>
+        ) : (
+          <FileTree nodes={filteredFiles} />
+        )}
       </div>
     </div>
   );

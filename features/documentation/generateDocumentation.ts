@@ -1,13 +1,16 @@
 import { ai } from "@/lib/gemini";
-import { SYSTEM_PROMPT } from "@/lib/gemini/systemPrompt";
+import { CHAT_SYSTEM_PROMPT, SYSTEM_PROMPT } from "@/lib/gemini/systemPrompt";
 import { Pinecone } from "@pinecone-database/pinecone";
 
 export async function generateDocumentation(
   projectId: string,
   userQuery: string,
+  intent: string,
   pineconeIndex: ReturnType<Pinecone["index"]>,
   onChunk?: (chunk: string) => void
 ): Promise<string> {
+  const systemPrompt =
+    intent === "generate documentation" ? SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT;
   // Embed the user's query
   const queryEmbedding = await ai.models.embedContent({
     model: "text-embedding-004",
@@ -58,13 +61,17 @@ ${String(match.metadata?.content).slice(0, 5000)}
         role: "user",
         parts: [
           {
-            text: `${SYSTEM_PROMPT}
+            text: `${systemPrompt}
 
 ${context}
 
 ${userQuery}
 
-Generate the documentation:`,
+          ${
+            intent === "generate documentation"
+              ? "Generate the documentation"
+              : "Answer the question."
+          }:`,
           },
         ],
       },

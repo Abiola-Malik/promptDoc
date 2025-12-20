@@ -43,10 +43,57 @@ export async function POST(
     }
 
     const body = await request.json();
-    const { message } = body;
+    const { message, intent } = body;
 
     if (!message) {
       return new Response("Message required", { status: 400 });
+    }
+
+    if (intent === "generate documentation") {
+      try {
+        const fullContent = await generateDocumentation(
+          projectId,
+          message,
+          intent,
+          index
+        );
+
+        // smart filename creation based on user query
+        const lower = message.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+        let filename = `generated-doc.md`;
+        if (lower.includes("readme")) filename = "README.md";
+        else if (lower.includes("contributing")) filename = "CONTRIBUTING.md";
+        else if (lower.includes("changelog")) filename = "CHANGELOG.md";
+        else if (lower.includes("api")) filename = "docs/API.md";
+        else if (lower.includes("component")) filename = "docs/COMPONENTS.md";
+        const title =
+          message.charAt(0).toUpperCase() + message.slice(1).replace(/\?$/, "");
+        return new Response(
+          JSON.stringify({
+            file: {
+              filename,
+              content: fullContent.trim(),
+              title,
+            },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }
+        );
+      } catch (error) {
+        if (error instanceof Error) {
+          return new Response(JSON.stringify({ error: error.message }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        } else {
+          return new Response(JSON.stringify({ error: "Unknown error" }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+      }
     }
 
     const encoder = new TextEncoder();
@@ -57,13 +104,22 @@ export async function POST(
             encoder.encode(`data: ${JSON.stringify({ type: "start" })}\n\n`)
           );
 
-          await generateDocumentation(projectId, message, index, (chunk) => {
-            controller.enqueue(
-              encoder.encode(
-                `data: ${JSON.stringify({ type: "chunk", content: chunk })}\n\n`
-              )
-            );
-          });
+          await generateDocumentation(
+            projectId,
+            message,
+            intent,
+            index,
+            (chunk) => {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "chunk",
+                    content: chunk,
+                  })}\n\n`
+                )
+              );
+            }
+          );
 
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`)

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle } from "lucide-react";
 import { FilesExplorer } from "./components/files-explorer";
 import { useProject } from "@/hooks/useProjects";
+import { FileSyncProvider } from "./components/FileSyncProvider";
 
 export default function ProjectPage({
   params,
@@ -138,7 +139,9 @@ export default function ProjectPage({
             </TabsContent>
 
             <TabsContent value="files" className="h-full m-0">
-              <FilesExplorer projectId={awaitedParams.projectId} />
+              <FileSyncProvider>
+                <FilesExplorer projectId={awaitedParams.projectId} />
+              </FileSyncProvider>
             </TabsContent>
           </div>
         </Tabs>

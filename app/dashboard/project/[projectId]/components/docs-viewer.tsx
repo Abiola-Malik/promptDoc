@@ -7,6 +7,14 @@ import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import type { ReactNode } from "react";
+
+type CodeProps = {
+  node?: unknown;
+  inline?: boolean;
+  className?: string;
+  children?: ReactNode;
+} & React.HTMLAttributes<HTMLElement>;
 
 const sampleMarkdown = `# React Dashboard Documentation
 
@@ -60,6 +68,7 @@ Uses Next.js App Router with hybrid Server/Client rendering. Data flows through 
 
 export function DocsViewer({ projectId }: { projectId: string }) {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  console.log(projectId);
 
   const copyToClipboard = async (code: string) => {
     await navigator.clipboard.writeText(code);
@@ -153,7 +162,7 @@ export function DocsViewer({ projectId }: { projectId: string }) {
               hr() {
                 return <hr className="my-12 border-border/50" />;
               },
-              code({ inline, className, children, ...props }: any) {
+              code({ inline, className, children, ...props }: CodeProps) {
                 const match = /language-(\w+)/.exec(className || "");
                 const codeString = String(children).replace(/\n$/, "");
 

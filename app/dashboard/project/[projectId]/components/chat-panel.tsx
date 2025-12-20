@@ -18,15 +18,24 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { cn } from "@/lib/utils";
 import remarkGfm from "remark-gfm";
+import type { ReactNode } from "react";
 
 interface ChatPanelProps {
   projectId: string;
 }
 
+type CodeProps = {
+  node?: unknown;
+  inline?: boolean;
+  className?: string;
+  children?: ReactNode;
+} & React.HTMLAttributes<HTMLElement>;
+
 export function ChatPanel({ projectId }: ChatPanelProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"chat" | "generate-docs">("chat");
 
   const { messages, streamingMessage, isLoading, sendMessage, stop } = useChat({
     projectId,
@@ -51,8 +60,26 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-    sendMessage(input);
+
+    const trimmedInput = input.trim();
+
+    // Detect if this should trigger doc generation
+    const isDocRequest =
+      mode === "generate-docs" ||
+      /generate.*(docs?|documentation|readme)|create.*(readme|docs?)|document this/i.test(
+        trimmedInput
+      );
+
+    if (isDocRequest) {
+      // Special handling: send message + trigger file creation
+      sendMessage(trimmedInput, { intent: "generate documentation" });
+    } else {
+      // Normal chat
+      sendMessage(trimmedInput);
+    }
+
     setInput("");
+    setMode("chat"); // Reset to chat mode after sending doc request
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -158,7 +185,7 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
                                 className,
                                 children,
                                 ...props
-                              }: any) {
+                              }: CodeProps) {
                                 const match = /language-(\w+)/.exec(
                                   className || ""
                                 );
@@ -322,6 +349,33 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
       {/* Fixed Input at Bottom */}
       <div className="border-t border-border bg-background px-4 py-5 shadow-inner shrink-0 sticky bottom-0">
         <div className="mx-auto max-w-4xl">
+          <div className="flex justify-center gap-4 mb-4">
+            <button
+              type="button"
+              onClick={() => setMode("chat")}
+              className={cn(
+                "px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                mode === "chat"
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              Chat
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("generate-docs")}
+              className={cn(
+                "px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2",
+                mode === "generate-docs"
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted"
+              )}
+            >
+              <Sparkles className="w-4 h-4" />
+              Generate Docs
+            </button>
+          </div>
           <form onSubmit={handleSubmit} className="flex gap-3">
             <Textarea
               value={input}

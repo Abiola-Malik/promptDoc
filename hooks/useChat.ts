@@ -29,7 +29,7 @@ export function useChat({ projectId, onError }: UseChatOptions) {
   const currentAssistantIdRef = useRef<string | null>(null);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, options?: { intent: "generate documentation" }) => {
       if (!content.trim() || isLoading) return;
 
       // Add user message
@@ -41,6 +41,93 @@ export function useChat({ projectId, onError }: UseChatOptions) {
       };
 
       setMessages((prev) => [...prev, userMessage]);
+      if (options?.intent === "generate documentation") {
+        setIsLoading(true);
+        const generatingMessageId = `assistant-${Date.now()}`;
+        currentAssistantIdRef.current = generatingMessageId;
+        const generatingMessage: Message = {
+          id: generatingMessageId,
+          role: "assistant",
+          content: "Generating documentation...",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, generatingMessage]);
+        abortControllerRef.current = new AbortController();
+        try {
+          const response = await fetch(`/api/projects/${projectId}/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: content,
+              intent: "generate documentation",
+            }),
+            signal: abortControllerRef.current?.signal,
+          });
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(
+              errorData.error || "Failed to generate documentation"
+            );
+          }
+          const data = await response.json();
+          if (data && data.file) {
+            const { filename, content: fileContent, title } = data.file;
+            const finalPath = filename.startsWith("/")
+              ? filename
+              : `/docs/${filename}`;
+            const successMessage: Message = {
+              id: generatingMessageId,
+              role: "assistant",
+              content: `**${
+                title || filename
+              }** generated!\n\n→ Saved as \`${finalPath}\`\n\nYou can now view and edit it in the file explorer.`,
+              timestamp: new Date(),
+            };
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === generatingMessageId ? successMessage : msg
+              )
+            );
+
+            // Trigger global file creation event
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("fileCreated", {
+                  detail: { path: finalPath, content: fileContent, open: true },
+                })
+              );
+            }
+          } else {
+            throw new Error("No file returned from server");
+          }
+        } catch (error) {
+          // error handling
+          const errorMsg =
+            error instanceof Error
+              ? error.message
+              : "Failed to generate documentation";
+
+          const errorMessage: Message = {
+            id: generatingMessageId,
+            role: "assistant",
+            content: `**Error generating documentation:**\n\n${errorMsg}`,
+            timestamp: new Date(),
+          };
+
+          setMessages((prev) =>
+            prev.map((m) => (m.id === generatingMessageId ? errorMessage : m))
+          );
+
+          onError?.(errorMsg);
+        } finally {
+          setIsLoading(false);
+          abortControllerRef.current = null;
+          currentAssistantIdRef.current = null;
+        }
+        return;
+      }
+
+      ///// NORMAL CHAT MESSAGE SENDING /////
       setIsLoading(true);
       setStreamingMessage(""); // Clear previous streaming message
 
