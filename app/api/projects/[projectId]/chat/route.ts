@@ -7,13 +7,12 @@ import { index } from "@/db/pinecone";
 import { generateDocumentation } from "@/features/documentation/generateDocumentation";
 
 const { DatabaseId, projectsCollectionId } = appwriteConfig;
+interface RouteContext {
+  params: Promise<{ projectId: string }>;
+}
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { projectId: string } }
-) {
-  const awaitedParams = await params;
-  const { projectId } = awaitedParams;
+export async function POST(request: NextRequest, context: RouteContext) {
+  const { projectId } = await context.params;
 
   if (!projectId) {
     return new Response("Missing projectId", { status: 400 });
