@@ -53,9 +53,9 @@ ${String(match.metadata?.content).slice(0, 5000)}
   // Generate documentation with Gemini
   const response = await ai.models.generateContentStream({
     model: "gemini-2.0-flash",
-    generationConfig: {
-      responseMimeType: "text/plain",
-    },
+    // generationConfig: {
+    //   responseMimeType: "text/plain",
+    // },
     contents: [
       {
         role: "user",
