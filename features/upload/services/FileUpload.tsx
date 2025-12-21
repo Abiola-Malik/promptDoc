@@ -25,6 +25,7 @@ export const fileUpload = async (
     const documentation = await generateDocumentation(
       existingProjectId.$id,
       userQuery,
+      "generate documentation",
       index
     );
 
