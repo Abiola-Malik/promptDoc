@@ -1,6 +1,13 @@
-"use client";
+// hooks/useChat.ts      if (!content.trim() || isLoading || isLoadingHistory || !chatId) return;"use client";
 
-import { useState, useCallback, useRef } from "react";
+import {
+  saveMessage,
+  getChatMessages,
+  type Message as DBMessage,
+} from "@/lib/actions/chats.actions";
+import { createGeneratedFile } from "@/lib/actions/file.actions";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useFileStore } from "@/stores/FileStore";
 
 interface Message {
   id: string;
@@ -18,21 +25,73 @@ interface Message {
 
 interface UseChatOptions {
   projectId: string;
+  chatId: string; // Now required - passed from parent
   onError?: (error: string) => void;
 }
 
-export function useChat({ projectId, onError }: UseChatOptions) {
+export function useChat({ projectId, chatId, onError }: UseChatOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
 
-  const sendMessage = useCallback(
-    async (content: string, options?: { intent: "generate documentation" }) => {
-      if (!content.trim() || isLoading) return;
+  // Load chat history when chatId changes
+  useEffect(() => {
+    let cancelled = false;
 
-      // Add user message
+    const loadHistory = async () => {
+      if (!chatId) return;
+
+      try {
+        setIsLoadingHistory(true);
+        const dbMessages = await getChatMessages(chatId);
+
+        if (cancelled) return;
+
+        const loadedMessages: Message[] = dbMessages.map((msg) => ({
+          id: msg.$id,
+          role: msg.role,
+          content: msg.content,
+
+          timestamp: new Date(msg.createdAt),
+          sources: msg.sources
+            ? (() => {
+                try {
+                  return JSON.parse(msg.sources);
+                } catch {
+                  return undefined;
+                }
+              })()
+            : undefined,
+        }));
+
+        setMessages(loadedMessages);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Failed to load chat history:", error);
+        onError?.("Failed to load chat history");
+      } finally {
+        if (!cancelled) {
+          setIsLoadingHistory(false);
+        }
+      }
+    };
+
+    loadHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, onError]);
+  const sendMessage = useCallback(
+    async (
+      content: string,
+      options?: { intent?: "generate documentation" }
+    ) => {
+      if (!content.trim() || isLoading || !chatId) return;
+
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: "user",
@@ -41,18 +100,34 @@ export function useChat({ projectId, onError }: UseChatOptions) {
       };
 
       setMessages((prev) => [...prev, userMessage]);
+
+      try {
+        await saveMessage({
+          chatId,
+          role: "user",
+          content,
+          projectId,
+        });
+      } catch (error) {
+        console.error("Failed to save user message:", error);
+      }
+
+      ///// DOCUMENTATION GENERATION FLOW /////
       if (options?.intent === "generate documentation") {
         setIsLoading(true);
         const generatingMessageId = `assistant-${Date.now()}`;
         currentAssistantIdRef.current = generatingMessageId;
+
         const generatingMessage: Message = {
           id: generatingMessageId,
           role: "assistant",
           content: "Generating documentation...",
           timestamp: new Date(),
         };
+
         setMessages((prev) => [...prev, generatingMessage]);
         abortControllerRef.current = new AbortController();
+
         try {
           const response = await fetch(`/api/projects/${projectId}/chat`, {
             method: "POST",
@@ -61,47 +136,59 @@ export function useChat({ projectId, onError }: UseChatOptions) {
               message: content,
               intent: "generate documentation",
             }),
-            signal: abortControllerRef.current?.signal,
+            signal: abortControllerRef.current.signal,
           });
+
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(
               errorData.error || "Failed to generate documentation"
             );
           }
+
           const data = await response.json();
+
           if (data && data.file) {
             const { filename, content: fileContent, title } = data.file;
-            const finalPath = filename.startsWith("/")
-              ? filename
-              : `/docs/${filename}`;
+
+            const result = await createGeneratedFile({
+              projectId,
+              filename,
+              content: fileContent,
+              title: title || filename,
+            });
+
             const successMessage: Message = {
               id: generatingMessageId,
               role: "assistant",
-              content: `**${
-                title || filename
-              }** generated!\n\n→ Saved as \`${finalPath}\`\n\nYou can now view and edit it in the file explorer.`,
+              content: `**${title || filename}** generated!\n\n Saved as \`${
+                result.path
+              }\`\n\nView it in the **Documentation** or **Files** tab.`,
               timestamp: new Date(),
             };
+
             setMessages((prev) =>
               prev.map((msg) =>
                 msg.id === generatingMessageId ? successMessage : msg
               )
             );
 
-            // Trigger global file creation event
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("fileCreated", {
-                  detail: { path: finalPath, content: fileContent, open: true },
-                })
-              );
-            }
+            await saveMessage({
+              chatId,
+              role: "assistant",
+              content: successMessage.content,
+              projectId,
+            });
+
+            useFileStore.getState().addFile(result.path, result.url);
           } else {
             throw new Error("No file returned from server");
           }
         } catch (error) {
-          // error handling
+          if (error instanceof Error && error.name === "AbortError") {
+            return;
+          }
+
           const errorMsg =
             error instanceof Error
               ? error.message
@@ -110,7 +197,7 @@ export function useChat({ projectId, onError }: UseChatOptions) {
           const errorMessage: Message = {
             id: generatingMessageId,
             role: "assistant",
-            content: `**Error generating documentation:**\n\n${errorMsg}`,
+            content: ` **Error:**\n\n${errorMsg}`,
             timestamp: new Date(),
           };
 
@@ -127,15 +214,12 @@ export function useChat({ projectId, onError }: UseChatOptions) {
         return;
       }
 
-      ///// NORMAL CHAT MESSAGE SENDING /////
+      ///// NORMAL CHAT STREAMING /////
       setIsLoading(true);
-      setStreamingMessage(""); // Clear previous streaming message
+      setStreamingMessage("");
 
-      // Generate assistant message ID
       const assistantId = `assistant-${Date.now()}`;
       currentAssistantIdRef.current = assistantId;
-
-      // Create abort controller for cancellation
       abortControllerRef.current = new AbortController();
 
       try {
@@ -152,9 +236,7 @@ export function useChat({ projectId, onError }: UseChatOptions) {
         }
 
         const reader = response.body?.getReader();
-        if (!reader) {
-          throw new Error("No response body");
-        }
+        if (!reader) throw new Error("No response body");
 
         const decoder = new TextDecoder();
         let accumulatedContent = "";
@@ -172,24 +254,16 @@ export function useChat({ projectId, onError }: UseChatOptions) {
               try {
                 const data = JSON.parse(line.slice(6));
 
-                if (data.type === "start") {
-                  // Optional: handle start event
-                  console.log("Stream started");
-                }
-
                 if (data.type === "chunk") {
-                  // Accumulate content and update streaming message
                   accumulatedContent += data.content;
                   setStreamingMessage(accumulatedContent);
                 }
 
                 if (data.type === "sources") {
-                  // Store sources for final message
                   sources = data.sources;
                 }
 
                 if (data.type === "done") {
-                  // Finalize: move streaming message to messages array
                   const finalMessage: Message = {
                     id: assistantId,
                     role: "assistant",
@@ -199,7 +273,23 @@ export function useChat({ projectId, onError }: UseChatOptions) {
                   };
 
                   setMessages((prev) => [...prev, finalMessage]);
-                  setStreamingMessage(""); // Clear streaming message
+
+                  try {
+                    await saveMessage({
+                      chatId,
+                      role: "assistant",
+                      content: finalMessage.content,
+                      sources: finalMessage.sources?.map(
+                        (source) =>
+                          source.metadata?.filename || JSON.stringify(source)
+                      ),
+                      projectId,
+                    });
+                  } catch (error) {
+                    console.error("Failed to save assistant message:", error);
+                  }
+
+                  setStreamingMessage("");
                   setIsLoading(false);
                 }
 
@@ -207,10 +297,7 @@ export function useChat({ projectId, onError }: UseChatOptions) {
                   throw new Error(data.error);
                 }
               } catch (parseError) {
-                // Ignore JSON parse errors from incomplete chunks
-                if (parseError instanceof SyntaxError) {
-                  continue;
-                }
+                if (parseError instanceof SyntaxError) continue;
                 throw parseError;
               }
             }
@@ -218,9 +305,6 @@ export function useChat({ projectId, onError }: UseChatOptions) {
         }
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
-          console.log("Request cancelled by user");
-
-          // If there's accumulated content, save it
           if (streamingMessage) {
             const partialMessage: Message = {
               id: assistantId,
@@ -230,20 +314,17 @@ export function useChat({ projectId, onError }: UseChatOptions) {
             };
             setMessages((prev) => [...prev, partialMessage]);
           }
-
           setStreamingMessage("");
         } else {
           const errorMessage =
             error instanceof Error ? error.message : "Failed to send message";
 
-          console.error("Error sending message:", error);
           onError?.(errorMessage);
 
-          // Add error message to chat
           const errorMsg: Message = {
             id: assistantId,
             role: "assistant",
-            content: ` **Error:** ${errorMessage}`,
+            content: `**Error:** ${errorMessage}`,
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, errorMsg]);
@@ -255,7 +336,7 @@ export function useChat({ projectId, onError }: UseChatOptions) {
         currentAssistantIdRef.current = null;
       }
     },
-    [projectId, isLoading, onError]
+    [projectId, chatId, isLoading, streamingMessage, onError]
   );
 
   const stop = useCallback(() => {
@@ -264,18 +345,12 @@ export function useChat({ projectId, onError }: UseChatOptions) {
     }
   }, []);
 
-  const clearMessages = useCallback(() => {
-    setMessages([]);
-    setStreamingMessage("");
-    setIsLoading(false);
-  }, []);
-
   return {
     messages,
     streamingMessage,
-    isLoading,
+    isLoading: isLoading || isLoadingHistory,
     sendMessage,
     stop,
-    clearMessages,
+    chatId,
   };
 }

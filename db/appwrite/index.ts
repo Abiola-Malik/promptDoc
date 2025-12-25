@@ -1,7 +1,7 @@
-'use server';
+"use server";
 
-import { Client, Account, Databases, Storage } from 'node-appwrite';
-import { appwriteConfig } from './config';
+import { Client, Account, Databases, Storage } from "node-appwrite";
+import { appwriteConfig } from "./config";
 const createAdminClient = async () => {
   const client = new Client()
     .setEndpoint(appwriteConfig.EndpointUrl)
@@ -36,6 +36,9 @@ const createSessionClient = async (session: string) => {
     },
     get databases() {
       return new Databases(client);
+    },
+    get storage() {
+      return new Storage(client);
     },
   };
 };

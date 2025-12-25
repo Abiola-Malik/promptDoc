@@ -1,4 +1,3 @@
-
 interface User {
   username?: string;
   email?: string;
@@ -35,17 +34,17 @@ export interface appwriteConfig {
   chatsCollectionId: string;
   projectsCollectionId: string;
   messagesCollectionId: string;
+  storageBucketId: string;
+  filesCollectionId: string;
 }
 
 interface session {
-  success: boolean,
-  session : string
+  success: boolean;
+  session: string;
 }
 
-export interface Vector  {
-  id: string
-  values: number[]
-  metadata?: Record<string, unknown>
+export interface Vector {
+  id: string;
+  values: number[];
+  metadata?: Record<string, unknown>;
 }
-
-

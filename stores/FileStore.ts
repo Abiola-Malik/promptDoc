@@ -12,6 +12,7 @@ export interface FileNode {
 interface FileStore {
   files: FileNode[]; // Root level
   addFile: (path: string, content: string) => void;
+  revokeFileUrl: (url: string) => void;
   openFile: (path: string) => void;
   deleteFile: (path: string) => void;
   renameFile: (oldPath: string, newPath: string) => void;
@@ -23,19 +24,44 @@ export const useFileStore = create<FileStore>((set, get) => ({
     { path: "/docs", name: "docs", type: "folder", children: [], isOpen: true },
   ],
   addFile: (path, content) => {
-    const parts = path.split("/").filter(Boolean);
+    // store url instead of raw content for files
+
+    const url = URL.createObjectURL(
+      new Blob([content], { type: "text/markdown" })
+    );
+
+    const parts = path.split("/").filter((part) => part);
     set((state) => ({
-      files: addToTree(state.files, parts, content),
+      files: addToTree(state.files, parts, url),
     }));
   },
+  revokeFileUrl: (url) => {
+    URL.revokeObjectURL(url);
+  },
   openFile: (path) => {
-    console.log(`Opening ${path}`);
+    // function to open file in the documentation tab.
   },
   deleteFile: (path) => {
     const deleteFromTree = (
       nodes: FileNode[],
       targetPath: string
     ): FileNode[] => {
+      findAndRevoke(nodes, targetPath);
+      function findAndRevoke(nodes: FileNode[], targetPath: string) {
+        for (const node of nodes) {
+          if (
+            node.path === targetPath &&
+            node.type === "file" &&
+            node.content
+          ) {
+            URL.revokeObjectURL(node.content);
+            return;
+          }
+          if (node.type === "folder" && node.children) {
+            findAndRevoke(node.children, targetPath);
+          }
+        }
+      }
       return nodes
         .filter((node) => node.path !== targetPath)
         .map((node) => {
