@@ -1,6 +1,6 @@
 "use server";
 
-import { createAdminClient, createSessionClient } from "@/db/appwrite";
+import { createSessionClient } from "@/db/appwrite";
 import { appwriteConfig } from "@/db/appwrite/config";
 import { ID, Permission, Role } from "node-appwrite";
 import { getLoggedInUser } from "./user.action";

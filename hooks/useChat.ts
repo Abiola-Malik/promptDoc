@@ -1,12 +1,10 @@
-// hooks/useChat.ts      if (!content.trim() || isLoading || isLoadingHistory || !chatId) return;"use client";
+// hooks/useChat.ts
+"use client";
 
-import {
-  saveMessage,
-  getChatMessages,
-  type Message as DBMessage,
-} from "@/lib/actions/chats.actions";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { saveMessage } from "@/lib/actions/chats.actions";
 import { createGeneratedFile } from "@/lib/actions/file.actions";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useFileStore } from "@/stores/FileStore";
 
 interface Message {
@@ -25,66 +23,63 @@ interface Message {
 
 interface UseChatOptions {
   projectId: string;
-  chatId: string; // Now required - passed from parent
+  chatId: string;
   onError?: (error: string) => void;
 }
 
 export function useChat({ projectId, chatId, onError }: UseChatOptions) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const queryClient = useQueryClient();
   const [streamingMessage, setStreamingMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
 
-  // Load chat history when chatId changes
-  useEffect(() => {
-    let cancelled = false;
+  // Mutation for adding messages (optimistic updates)
+  const addMessageMutation = useMutation({
+    mutationFn: async (message: Message) => {
+      await saveMessage({
+        chatId,
+        role: message.role,
+        content: message.content,
+        projectId,
+        sources: message.sources?.map(
+          (source) => source.metadata?.filename || JSON.stringify(source)
+        ),
+      });
+      return message;
+    },
+    onMutate: async (newMessage) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["chat-messages", chatId] });
 
-    const loadHistory = async () => {
-      if (!chatId) return;
+      // Snapshot previous value
+      const previousMessages = queryClient.getQueryData<Message[]>([
+        "chat-messages",
+        chatId,
+      ]);
 
-      try {
-        setIsLoadingHistory(true);
-        const dbMessages = await getChatMessages(chatId);
+      // Optimistically update
+      queryClient.setQueryData<Message[]>(["chat-messages", chatId], (old) => [
+        ...(old || []),
+        newMessage,
+      ]);
 
-        if (cancelled) return;
+      return { previousMessages };
+    },
+    onError: (err, newMessage, context) => {
+      // Rollback on error
+      queryClient.setQueryData(
+        ["chat-messages", chatId],
+        context?.previousMessages
+      );
+      onError?.(err instanceof Error ? err.message : "Failed to save message");
+    },
+    onSettled: () => {
+      // Refetch after error or success
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", chatId] });
+    },
+  });
 
-        const loadedMessages: Message[] = dbMessages.map((msg) => ({
-          id: msg.$id,
-          role: msg.role,
-          content: msg.content,
-
-          timestamp: new Date(msg.createdAt),
-          sources: msg.sources
-            ? (() => {
-                try {
-                  return JSON.parse(msg.sources);
-                } catch {
-                  return undefined;
-                }
-              })()
-            : undefined,
-        }));
-
-        setMessages(loadedMessages);
-      } catch (error) {
-        if (cancelled) return;
-        console.error("Failed to load chat history:", error);
-        onError?.("Failed to load chat history");
-      } finally {
-        if (!cancelled) {
-          setIsLoadingHistory(false);
-        }
-      }
-    };
-
-    loadHistory();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [chatId, onError]);
   const sendMessage = useCallback(
     async (
       content: string,
@@ -99,18 +94,8 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, userMessage]);
-
-      try {
-        await saveMessage({
-          chatId,
-          role: "user",
-          content,
-          projectId,
-        });
-      } catch (error) {
-        console.error("Failed to save user message:", error);
-      }
+      // Optimistically add user message
+      addMessageMutation.mutate(userMessage);
 
       ///// DOCUMENTATION GENERATION FLOW /////
       if (options?.intent === "generate documentation") {
@@ -125,7 +110,12 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
           timestamp: new Date(),
         };
 
-        setMessages((prev) => [...prev, generatingMessage]);
+        // Optimistically add generating message
+        queryClient.setQueryData<Message[]>(
+          ["chat-messages", chatId],
+          (old) => [...(old || []), generatingMessage]
+        );
+
         abortControllerRef.current = new AbortController();
 
         try {
@@ -163,24 +153,34 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
               role: "assistant",
               content: `**${title || filename}** generated!\n\n Saved as \`${
                 result.path
-              }\`\n\nView it in the **Documentation** or **Files** tab.`,
+              }\`\n\nYou can now view and edit it in the file explorer.`,
               timestamp: new Date(),
             };
 
-            setMessages((prev) =>
-              prev.map((msg) =>
-                msg.id === generatingMessageId ? successMessage : msg
-              )
+            // Update generating message to success
+            queryClient.setQueryData<Message[]>(
+              ["chat-messages", chatId],
+              (old) =>
+                (old || []).map((msg) =>
+                  msg.id === generatingMessageId ? successMessage : msg
+                )
             );
 
-            await saveMessage({
-              chatId,
-              role: "assistant",
-              content: successMessage.content,
-              projectId,
-            });
+            // Save success message to DB
+            addMessageMutation.mutate(successMessage);
 
-            useFileStore.getState().addFile(result.path, result.url);
+            // Trigger file creation
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(
+                new CustomEvent("promptdoc:generate-file", {
+                  detail: {
+                    path: result.path,
+                    content: fileContent,
+                    open: true,
+                  },
+                })
+              );
+            }
           } else {
             throw new Error("No file returned from server");
           }
@@ -197,14 +197,19 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
           const errorMessage: Message = {
             id: generatingMessageId,
             role: "assistant",
-            content: ` **Error:**\n\n${errorMsg}`,
+            content: `**Error generating documentation:**\n\n${errorMsg}`,
             timestamp: new Date(),
           };
 
-          setMessages((prev) =>
-            prev.map((m) => (m.id === generatingMessageId ? errorMessage : m))
+          queryClient.setQueryData<Message[]>(
+            ["chat-messages", chatId],
+            (old) =>
+              (old || []).map((m) =>
+                m.id === generatingMessageId ? errorMessage : m
+              )
           );
 
+          addMessageMutation.mutate(errorMessage);
           onError?.(errorMsg);
         } finally {
           setIsLoading(false);
@@ -272,22 +277,8 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
                     sources,
                   };
 
-                  setMessages((prev) => [...prev, finalMessage]);
-
-                  try {
-                    await saveMessage({
-                      chatId,
-                      role: "assistant",
-                      content: finalMessage.content,
-                      sources: finalMessage.sources?.map(
-                        (source) =>
-                          source.metadata?.filename || JSON.stringify(source)
-                      ),
-                      projectId,
-                    });
-                  } catch (error) {
-                    console.error("Failed to save assistant message:", error);
-                  }
+                  // Add to cache via mutation
+                  addMessageMutation.mutate(finalMessage);
 
                   setStreamingMessage("");
                   setIsLoading(false);
@@ -312,23 +303,22 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
               content: streamingMessage + "\n\n_[Generation stopped]_",
               timestamp: new Date(),
             };
-            setMessages((prev) => [...prev, partialMessage]);
+            addMessageMutation.mutate(partialMessage);
           }
           setStreamingMessage("");
         } else {
           const errorMessage =
             error instanceof Error ? error.message : "Failed to send message";
 
-          onError?.(errorMessage);
-
           const errorMsg: Message = {
             id: assistantId,
             role: "assistant",
-            content: `**Error:** ${errorMessage}`,
+            content: ` **Error:** ${errorMessage}`,
             timestamp: new Date(),
           };
-          setMessages((prev) => [...prev, errorMsg]);
+          addMessageMutation.mutate(errorMsg);
           setStreamingMessage("");
+          onError?.(errorMessage);
         }
       } finally {
         setIsLoading(false);
@@ -336,7 +326,15 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
         currentAssistantIdRef.current = null;
       }
     },
-    [projectId, chatId, isLoading, streamingMessage, onError]
+    [
+      projectId,
+      chatId,
+      isLoading,
+      streamingMessage,
+      onError,
+      queryClient,
+      addMessageMutation,
+    ]
   );
 
   const stop = useCallback(() => {
@@ -344,13 +342,16 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
       abortControllerRef.current.abort();
     }
   }, []);
+  const messages = queryClient.getQueryData<Message[]>([
+    "chat-messages",
+    chatId,
+  ]) as Message[];
 
   return {
     messages,
     streamingMessage,
-    isLoading: isLoading || isLoadingHistory,
+    isLoading,
     sendMessage,
     stop,
-    chatId,
   };
 }

@@ -1,3 +1,4 @@
+// app/dashboard/project/[projectId]/components/chat-message.tsx
 "use client";
 
 import { useRef, useEffect, useState } from "react";
@@ -12,17 +13,33 @@ import {
   Sparkles,
   FileCode2,
 } from "lucide-react";
-import { useChat } from "@/hooks/useChat";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { cn } from "@/lib/utils";
 import remarkGfm from "remark-gfm";
 import type { ReactNode } from "react";
+import { useChat } from "@/hooks/useChat";
+
+interface Message {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: Date;
+  sources?: Array<{
+    score?: number;
+    metadata?: {
+      filename?: string;
+      startLine?: number;
+    };
+  }>;
+}
 
 interface ChatMessagesProps {
   projectId: string;
   chatId: string;
+  messages: Message[]; // Passed from parent
+  isLoadingHistory: boolean; // Passed from parent
 }
 
 type CodeProps = {
@@ -32,13 +49,18 @@ type CodeProps = {
   children?: ReactNode;
 } & React.HTMLAttributes<HTMLElement>;
 
-export function ChatMessages({ projectId, chatId }: ChatMessagesProps) {
+export function ChatMessages({
+  projectId,
+  chatId,
+  messages,
+  isLoadingHistory,
+}: ChatMessagesProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"chat" | "generate-docs">("chat");
 
-  const { messages, streamingMessage, isLoading, sendMessage, stop } = useChat({
+  const { streamingMessage, isLoading, sendMessage, stop } = useChat({
     projectId,
     chatId,
   });
@@ -170,10 +192,18 @@ export function ChatMessages({ projectId, chatId }: ChatMessagesProps) {
     },
   };
 
+  if (isLoadingHistory) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col">
       {/* Scrollable Messages */}
-      <div className="flex-1 ">
+      <div className="flex-1 overflow-x-hidden overflow-y-auto">
         <div
           ref={viewportRef}
           className="flex-1 px-6 py-8 overflow-y-auto overflow-x-hidden"
@@ -225,12 +255,14 @@ export function ChatMessages({ projectId, chatId }: ChatMessagesProps) {
                       msg.role === "user" ? "justify-end" : "justify-start"
                     )}
                   >
+                    {/* AI Avatar */}
                     {msg.role === "assistant" && (
                       <div className="mt-2 flex size-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground text-lg font-bold shadow-xl ring-4 ring-primary/10">
                         AI
                       </div>
                     )}
 
+                    {/* Message Bubble */}
                     <div
                       className={cn(
                         "max-w-3xl rounded-3xl px-6 py-5 shadow-lg ring-1 ring-border",
@@ -248,7 +280,8 @@ export function ChatMessages({ projectId, chatId }: ChatMessagesProps) {
                             {msg.content}
                           </ReactMarkdown>
 
-                          {msg.sources && msg.sources.length > 0 && (
+                          {/* Sources */}
+                          {msg.sources?.length && msg.sources.length > 0 && (
                             <div className="mt-6 pt-6 border-t border-border/50">
                               <p className="mb-3 text-sm font-semibold text-muted-foreground">
                                 Sources ({msg.sources.length})

@@ -3,7 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "next-themes";
 import AOSInit from "@/components/AOSinit";
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/next";
+import { QueryProvider } from "./providers/query-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,11 +32,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-promptdoc-bg-base text-promptdoc-text-primary`}
       >
         <AOSInit />
+
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          {children}
+          <QueryProvider>{children}</QueryProvider>
           <Analytics />
         </ThemeProvider>
-        
       </body>
     </html>
   );
