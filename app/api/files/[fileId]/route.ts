@@ -1,8 +1,10 @@
 // app/api/files/[fileId]/route.ts
 import { createSessionClient } from "@/db/appwrite";
 import { appwriteConfig } from "@/db/appwrite/config";
+import { getLoggedInUser } from "@/lib/actions/user.action";
 import { getSession } from "@/lib/helpers";
 import { NextRequest } from "next/server";
+import { Query } from "node-appwrite";
 
 const { DatabaseId, filesCollectionId, storageBucketId } = appwriteConfig;
 
@@ -16,6 +18,12 @@ export async function GET(
     return new Response("Missing fileId", { status: 400 });
   }
 
+  const user = await getLoggedInUser();
+
+  if (!user) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   try {
     const sessionResult = await getSession();
     if (!sessionResult.session) {
@@ -27,14 +35,24 @@ export async function GET(
     );
 
     // Get metadata to verify ownership and get filename/mime
-    const fileDoc = await databases.getDocument(
+    const result = await databases.listDocuments(
       DatabaseId,
       filesCollectionId,
-      fileId
+      [
+        Query.equal("fileId", fileId), // This is correct here
+        Query.limit(1),
+      ]
     );
 
-    // Optional: verify project/user ownership here if needed
-    // For now, trust that permissions on the document protect it
+    if (result.total === 0) {
+      return new Response("File not found", { status: 404 });
+    }
+
+    const fileDoc = result.documents[0];
+
+    if (fileDoc.userId !== user.$id) {
+      return new Response("Forbidden", { status: 403 });
+    }
 
     // Get actual file view (binary)
     const fileData = await storage.getFileView(storageBucketId, fileDoc.fileId);

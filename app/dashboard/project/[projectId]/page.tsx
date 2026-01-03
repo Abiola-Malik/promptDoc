@@ -1,7 +1,7 @@
 // app/dashboard/project/[projectId]/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { ProjectHeader } from "./components/project-header";
 import { ChatPanel } from "./components/chat-panel";
 import { DocsViewer } from "./components/docs-viewer";
@@ -9,8 +9,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, AlertCircle } from "lucide-react";
 import { FilesExplorer } from "./components/files-explorer";
 import { useProject } from "@/hooks/useProjects";
-import { useQuery } from "@tanstack/react-query";
-import { getProjectChats, getChatMessages } from "@/lib/actions/chats.actions";
+import { useTabsStore } from "@/stores/TabStore";
 
 export default function ProjectPage({
   params,
@@ -19,49 +18,14 @@ export default function ProjectPage({
 }) {
   const awaitedParams = React.use(params);
   const { project, isLoading, error } = useProject(awaitedParams.projectId);
-  const [activeTab, setActiveTab] = useState("chat");
+  const { activeTab, setActiveTab } = useTabsStore();
 
-  // Prefetch chats at parent level (stays in cache when switching tabs)
-  const { data: chats = [] } = useQuery({
-    queryKey: ["project-chats", awaitedParams.projectId],
-    queryFn: () => getProjectChats(awaitedParams.projectId),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  // Prefetch messages for active chat (stays in cache)
-  const activeChatId = chats[0]?.$id || null;
-
-  useQuery({
-    queryKey: ["chat-messages", activeChatId],
-    queryFn: async () => {
-      if (!activeChatId) return [];
-      const messages = await getChatMessages(activeChatId);
-      return messages.map((msg) => ({
-        id: msg.$id,
-        role: msg.role,
-        content: msg.content,
-        timestamp: new Date(msg.createdAt),
-        sources: msg.sources
-          ? (() => {
-              try {
-                return JSON.parse(msg.sources);
-              } catch {
-                console.warn(`Invalid JSON in sources for message ${msg.$id}`);
-                return undefined;
-              }
-            })()
-          : undefined,
-      }));
-    },
-    enabled: !!activeChatId,
-    staleTime: Infinity, // Never refetch while in this session
-  });
   // Auto-switch to chat if docs aren't ready yet
   useEffect(() => {
     if (project?.status === "processing") {
       setActiveTab("chat");
     }
-  }, [project?.status]);
+  }, [project?.status, setActiveTab]);
 
   if (isLoading) {
     return (
@@ -167,12 +131,20 @@ export default function ProjectPage({
           </div>
 
           {/* Tab Content - Keep all mounted with CSS hide/show */}
-          <div className="flex-1 overflow-hidden bg-muted/20 relative">
-            <div className={activeTab === "chat" ? "h-full" : "hidden h-full"}>
+          <div className="flex-1 flex overflow-hidden bg-muted/20 relative">
+            <div
+              className={
+                activeTab === "chat" ? "h-full flex-1" : "hidden h-full flex-1"
+              }
+            >
               <ChatPanel projectId={awaitedParams.projectId} />
             </div>
 
-            <div className={activeTab === "docs" ? "h-full" : "hidden h-full"}>
+            <div
+              className={
+                activeTab === "docs" ? "h-full flex-1" : "hidden h-full flex-1"
+              }
+            >
               {isProcessing ? (
                 <div className="h-full flex items-center justify-center">
                   <div className="text-center space-y-4">
@@ -188,11 +160,15 @@ export default function ProjectPage({
                   </div>
                 </div>
               ) : (
-                <DocsViewer projectId={awaitedParams.projectId} />
+                <DocsViewer />
               )}
             </div>
 
-            <div className={activeTab === "files" ? "h-full" : "hidden h-full"}>
+            <div
+              className={
+                activeTab === "files" ? "h-full flex-1" : "hidden h-full flex-1"
+              }
+            >
               <FilesExplorer projectId={awaitedParams.projectId} />
             </div>
           </div>

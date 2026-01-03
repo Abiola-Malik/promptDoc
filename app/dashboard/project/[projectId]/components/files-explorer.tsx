@@ -9,7 +9,7 @@ import {
   ChevronRight,
   ChevronDown,
   Download,
-  // Eye,
+  Eye,
   Loader2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getProjectFiles } from "@/lib/actions/file.actions";
+import { useDocsStore } from "@/stores/DocStore";
+import { useTabsStore } from "@/stores/TabStore";
+
 interface FileNode {
   path: string;
   name: string;
@@ -32,6 +35,20 @@ interface FileTreeProps {
 }
 
 function FileTree({ nodes, level = 0 }: FileTreeProps) {
+  const { loadDocContent } = useDocsStore();
+  const { setActiveTab } = useTabsStore();
+
+  const handlePreview = async (node: FileNode) => {
+    if (node.type !== "file" || !node.fileId) return;
+
+    try {
+      await loadDocContent(node.fileId, node.path, node.name);
+      setActiveTab("docs");
+    } catch (error) {
+      console.error("Failed to load document:", error);
+      // Consider showing a toast notification to the user
+    }
+  };
   return (
     <div className={cn("ml-4", level > 0 && "border-l border-border/50 pl-2")}>
       {nodes.map((node) => (
@@ -53,16 +70,24 @@ function FileTree({ nodes, level = 0 }: FileTreeProps) {
             </>
           ) : (
             <div className="group flex items-center justify-between w-full py-1 px-2 hover:bg-muted/50 rounded-md">
-              <a
-                href={`/api/files/${node.fileId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-sm flex-1"
+              <button
+                onClick={() => handlePreview(node)}
+                className="flex items-center gap-2 text-sm flex-1 text-left truncate"
+                title={node.name}
               >
-                <File className="w-4 h-4 text-muted-foreground" />
-                {node.name}
-              </a>
-              <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <File className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span className="truncate">{node.name}</span>
+              </button>
+              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6"
+                  onClick={() => handlePreview(node)}
+                  title="Preview in Docs"
+                >
+                  <Eye className="w-3 h-3" />
+                </Button>
                 <Button
                   size="icon"
                   variant="ghost"
@@ -74,7 +99,7 @@ function FileTree({ nodes, level = 0 }: FileTreeProps) {
                     <Download className="w-3 h-3" />
                   </a>
                 </Button>
-              </div>{" "}
+              </div>
             </div>
           )}
         </div>
@@ -86,23 +111,62 @@ function FileTree({ nodes, level = 0 }: FileTreeProps) {
 export function FilesExplorer({ projectId }: { projectId: string }) {
   const [search, setSearch] = useState("");
 
-  const { data: files = [], isLoading } = useQuery({
+  const { data: rawFiles = [], isLoading } = useQuery({
     queryKey: ["project-files", projectId],
     queryFn: () => getProjectFiles(projectId),
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    select: (files) => buildFileTree(files),
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
+
+  const buildFileTree = (
+    files: Array<{ path: string; fileId: string }>
+  ): FileNode[] => {
+    const root: FileNode[] = [];
+
+    files.forEach((file) => {
+      const parts = file.path.split("/").filter(Boolean);
+      let current = root;
+
+      parts.forEach((part, i) => {
+        if (i === parts.length - 1) {
+          current.push({
+            path: file.path,
+            name: part,
+            type: "file",
+            fileId: file.fileId,
+          });
+        } else {
+          let folder = current.find(
+            (n) => n.name === part && n.type === "folder"
+          );
+          if (!folder) {
+            folder = {
+              path: "/" + parts.slice(0, i + 1).join("/"),
+              name: part,
+              type: "folder",
+              children: [],
+              isOpen: true,
+            };
+            current.push(folder);
+          }
+          current = folder.children!;
+        }
+      });
+    });
+
+    return root;
+  };
+
   const filterTree = (nodes: FileNode[], query: string): FileNode[] => {
     return nodes
       .map((node) => {
         if (node.type === "folder" && node.children) {
-          const filtered = filterTree(node.children, query);
-          if (filtered.length > 0) {
-            return { ...node, children: filtered, isOpen: true };
-          }
-          if (node.name.toLowerCase().includes(query)) {
-            return { ...node, children: [], isOpen: false };
+          const filteredChildren = filterTree(node.children, query);
+          if (
+            filteredChildren.length > 0 ||
+            node.name.toLowerCase().includes(query)
+          ) {
+            return { ...node, children: filteredChildren, isOpen: true };
           }
           return null;
         }
@@ -111,9 +175,10 @@ export function FilesExplorer({ projectId }: { projectId: string }) {
       .filter(Boolean) as FileNode[];
   };
 
+  const treeFiles = buildFileTree(rawFiles);
   const filteredFiles = search
-    ? filterTree(files, search.toLowerCase())
-    : files;
+    ? filterTree(treeFiles, search.toLowerCase())
+    : treeFiles;
 
   if (isLoading) {
     return (
@@ -150,44 +215,4 @@ export function FilesExplorer({ projectId }: { projectId: string }) {
       </div>
     </div>
   );
-}
-
-// Helper to build tree from flat list
-function buildFileTree(
-  files: Array<{ path: string; fileId: string }>
-): FileNode[] {
-  const root: FileNode[] = [];
-
-  files.forEach((file) => {
-    const parts = file.path.split("/").filter(Boolean);
-    let current = root;
-
-    parts.forEach((part, i) => {
-      if (i === parts.length - 1) {
-        current.push({
-          path: file.path,
-          name: part,
-          type: "file",
-          fileId: file.fileId,
-        });
-      } else {
-        let folder = current.find(
-          (n) => n.name === part && n.type === "folder"
-        );
-        if (!folder) {
-          folder = {
-            path: "/" + parts.slice(0, i + 1).join("/"),
-            name: part,
-            type: "folder",
-            children: [],
-            isOpen: true,
-          };
-          current.push(folder);
-        }
-        current = folder.children!;
-      }
-    });
-  });
-
-  return root;
 }
