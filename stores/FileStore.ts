@@ -4,6 +4,7 @@ export interface FileNode {
   path: string;
   name: string;
   type: "file" | "folder";
+  fileId?: string; // For files stored in backend
   content?: string; // For files
   children?: FileNode[]; // For folders
   isOpen?: boolean; // For folder expand/collapse
@@ -24,8 +25,6 @@ export const useFileStore = create<FileStore>((set, get) => ({
     { path: "/docs", name: "docs", type: "folder", children: [], isOpen: true },
   ],
   addFile: (path, content) => {
-    // store url instead of raw content for files
-
     const url = URL.createObjectURL(
       new Blob([content], { type: "text/markdown" })
     );

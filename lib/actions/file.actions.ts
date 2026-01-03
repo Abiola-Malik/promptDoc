@@ -2,7 +2,7 @@
 
 import { createSessionClient } from "@/db/appwrite";
 import { appwriteConfig } from "@/db/appwrite/config";
-import { ID, Permission, Role } from "node-appwrite";
+import { ID, Permission, Query, Role } from "node-appwrite";
 import { getLoggedInUser } from "./user.action";
 import { getSession } from "../helpers";
 
@@ -19,7 +19,7 @@ interface CreateGeneratedFileResult {
   fileId: string;
   path: string;
   url: string;
-  size: number;
+  size: string;
 }
 
 export async function createGeneratedFile({
@@ -86,12 +86,18 @@ export async function createGeneratedFile({
             fileId: uploadedFile.$id,
             path: filename,
             title,
-            size: uploadedFile.sizeOriginal,
+            size: uploadedFile.sizeOriginal.toString(),
             mimeType: "text/markdown",
             userId: user.$id,
             // createdAt: new Date().toISOString(),
             // updatedAt: new Date().toISOString(),
-          }
+          },
+          [
+            Permission.read(Role.user(user.$id)),
+            Permission.write(Role.user(user.$id)),
+            Permission.update(Role.user(user.$id)),
+            Permission.delete(Role.user(user.$id)),
+          ]
         );
       } catch (dbError) {
         console.error("Failed to save file metadata:", dbError);
@@ -105,7 +111,7 @@ export async function createGeneratedFile({
       fileId: uploadedFile.$id,
       path: filename,
       url: `/api/files/${uploadedFile.$id}`, // You'll need to create this route
-      size: uploadedFile.sizeOriginal,
+      size: uploadedFile.sizeOriginal.toString(),
     };
   } catch (error) {
     console.error("Error creating generated file:", error);
@@ -116,4 +122,26 @@ export async function createGeneratedFile({
 
     throw new Error("Failed to create file: Unknown error");
   }
+}
+
+export async function getProjectFiles(projectId: string) {
+  const user = await getLoggedInUser();
+  if (!user) throw new Error("Unauthorized");
+  const { session } = await getSession();
+  if (!session) throw new Error("Unauthorized");
+
+  const { databases } = await createSessionClient(session);
+
+  const docs = await databases.listDocuments(DatabaseId, filesCollectionId, [
+    Query.equal("projectId", projectId),
+    Query.equal("userId", user.$id), // ← This ensures only user's files
+    Query.orderDesc("$createdAt"),
+  ]);
+
+  return docs.documents.map((doc) => ({
+    path: doc.path,
+    fileId: doc.fileId || doc.$id,
+    title: doc.title,
+    size: doc.size,
+  }));
 }
