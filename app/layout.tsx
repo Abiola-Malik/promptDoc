@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import AOSInit from "@/components/AOSinit";
 import { Analytics } from "@vercel/analytics/next";
 import { QueryProvider } from "./providers/query-provider";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,6 +37,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <QueryProvider>{children}</QueryProvider>
           <Analytics />
+          <SpeedInsights />
         </ThemeProvider>
       </body>
     </html>
