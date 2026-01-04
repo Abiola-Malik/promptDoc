@@ -13,6 +13,30 @@ import { getAllFiles } from "./getAllFiles";
 import { validateZipEntry } from "./validateZipEntry";
 import { cleanupTempDir } from "../temp/cleanTempDir";
 
+/**
+ * Extracts files from a ZIP archive, filtering for supported code files.
+ * Returns an {@link ExtractionResult} with extracted file contents and metadata.
+ * The extractionPath is returned intentionally so callers can access extracted files
+ * for further processing (e.g., reading additional files not included in the result).
+ *
+ * @important The caller MUST clean up the temp directory using
+ * {@link cleanupTempDir}(result.extractionPath) when finished to prevent disk space leaks.
+ * Cleanup should be performed in a finally block to ensure it happens on all code paths,
+ * including errors.
+ *
+ * @example
+ * ```typescript
+ * const result = await extractZipFile(zipPath);
+ * try {
+ *   // Process result.files
+ *   if (result.success) {
+ *     // Do something with extracted files
+ *   }
+ * } finally {
+ *   await cleanupTempDir(result.extractionPath);
+ * }
+ * ```
+ */
 export const extractZipFile = async (
   filepath: string
 ): Promise<ExtractionResult> => {
@@ -47,6 +71,7 @@ export const extractZipFile = async (
         error: `ZIP too large: ${(totalUncompressedSize / 1024 / 1024).toFixed(
           2
         )}MB (max ${MAX_TOTAL_SIZE / 1024 / 1024}MB)`,
+        extractionPath: tempDir,
       };
     }
 
@@ -82,6 +107,7 @@ export const extractZipFile = async (
           skipped: skippedCount,
         },
         error: "No supported code files found in ZIP",
+        extractionPath: tempDir,
       };
     }
 
@@ -133,6 +159,7 @@ export const extractZipFile = async (
         totalSize,
         skipped: skippedCount,
       },
+      extractionPath: tempDir,
     };
   } catch (error) {
     console.error(" Error extracting ZIP file:", error);
@@ -144,8 +171,7 @@ export const extractZipFile = async (
       stats: { totalFiles: 0, totalSize: 0, skipped: 0 },
       error:
         error instanceof Error ? "Failed to extract ZIP file" : "Unknown error",
+      extractionPath: tempDir,
     };
-  } finally {
-    await cleanupTempDir(tempDir);
   }
 };
