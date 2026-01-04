@@ -4,12 +4,11 @@
 import { useState, useEffect } from "react";
 import { ChatSidebar } from "./chat-sidebar";
 import { createChat, getProjectChats } from "@/lib/actions/chats.actions";
-import { Loader2, MessageSquare, ChevronLeft, Menu } from "lucide-react";
+import { Loader2, MessageSquare, Menu } from "lucide-react";
 import { ChatMessages } from "./chat-message";
 import { useQuery } from "@tanstack/react-query";
 import { getChatMessages } from "@/lib/actions/chats.actions";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
