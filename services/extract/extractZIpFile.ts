@@ -2,6 +2,7 @@ import path from "path";
 import { ExtractionResult, ExtractedFile } from "./extraction.types";
 import AdmZip from "adm-zip";
 import fs from "fs/promises";
+import { tmpdir } from "os";
 import {
   ALLOWED_EXTENSIONS,
   filesREGEX,
@@ -11,43 +12,29 @@ import {
 } from "@/constants";
 import { getAllFiles } from "./getAllFiles";
 import { validateZipEntry } from "./validateZipEntry";
-import { cleanupTempDir } from "../temp/cleanTempDir";
 
 /**
  * Extracts files from a ZIP archive, filtering for supported code files.
- * Returns an {@link ExtractionResult} with extracted file contents and metadata.
+ * Returns an ExtractionResult with extracted file contents and metadata.
  * The extractionPath is returned intentionally so callers can access extracted files
  * for further processing (e.g., reading additional files not included in the result).
  *
- * @important The caller MUST clean up the temp directory using
- * {@link cleanupTempDir}(result.extractionPath) when finished to prevent disk space leaks.
- * Cleanup should be performed in a finally block to ensure it happens on all code paths,
- * including errors.
- *
- * @example
- * ```typescript
- * const result = await extractZipFile(zipPath);
- * try {
- *   // Process result.files
- *   if (result.success) {
- *     // Do something with extracted files
- *   }
- * } finally {
- *   await cleanupTempDir(result.extractionPath);
- * }
- * ```
+ * The caller MUST clean up the temp directory using cleanupTempDir when finished
+ * to prevent disk space leaks. Cleanup should be performed in a finally block
+ * to ensure it happens on all code paths, including errors.
  */
 export const extractZipFile = async (
   filepath: string
 ): Promise<ExtractionResult> => {
   const tempDir = path.join(
-    process.cwd(),
-    "temp",
+    tmpdir(),
+    "promptdoc-extractions",
     `extract-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
   );
+
   try {
     // 1. Validate file exists
-    const absolutePath = path.resolve(process.cwd(), filepath);
+    const absolutePath = path.resolve(filepath);
     await fs.access(absolutePath);
 
     // 2. Load ZIP
@@ -132,23 +119,23 @@ export const extractZipFile = async (
         totalSize += stats.size;
 
         filesWithContent.push({
-          path: path.relative(tempDir, f).replace(/\\/g, "/"), // Normalize paths
+          path: path.relative(tempDir, f).replace(/\\/g, "/"),
           content,
           filename: path.basename(f),
           extension: path.extname(f),
           size: stats.size,
         });
       } catch (error) {
-        console.warn(` Failed to read file: ${path.basename(f)}`);
+        console.warn(`Failed to read file: ${path.basename(f)}`);
         skippedCount++;
         console.error(error);
       }
     }
 
     console.log(
-      ` Extracted ${filesWithContent.length} files (${(
-        totalSize / 1024
-      ).toFixed(2)}KB)`
+      `Extracted ${filesWithContent.length} files (${(totalSize / 1024).toFixed(
+        2
+      )}KB)`
     );
 
     return {
@@ -162,9 +149,8 @@ export const extractZipFile = async (
       extractionPath: tempDir,
     };
   } catch (error) {
-    console.error(" Error extracting ZIP file:", error);
+    console.error("Error extracting ZIP file:", error);
 
-    // Return safe error message (don't expose file paths)
     return {
       success: false,
       files: [],
