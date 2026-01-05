@@ -1,36 +1,43 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import Link from "next/link"
-import { Menu, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { Menu, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import Image from "next/image";
 
 export default function Navbar() {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = "hidden"
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = ""
+      document.body.style.overflow = "";
     }
 
     return () => {
-      document.body.style.overflow = ""
-    }
-  }, [isOpen])
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
-  const menuItems = ["Features", "Docs", "Pricing", "About", "Login"]
+  const menuItems = ["Features", "Docs", "Pricing", "About", "Login"];
 
   return (
     <>
       <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60">
         <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-bold text-xl text-foreground">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
-              PD
-            </div>
+          <Link
+            href="/"
+            className="flex items-center gap-2 font-bold text-xl text-foreground"
+          >
+            <Image
+              src="/promptdoc-logo.svg"
+              alt="PromptDoc Logo"
+              width={80}
+              height={80}
+            />{" "}
             PromptDoc
           </Link>
 
@@ -49,7 +56,7 @@ export default function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden md:block">
-            <Link href="/signup">
+            <Link href="/register">
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 Get Started Free
               </Button>
@@ -69,7 +76,9 @@ export default function Navbar() {
       {/* Mobile Menu Overlay */}
       <div
         className={`fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 ${
-          isOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          isOpen
+            ? "opacity-100 pointer-events-auto"
+            : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setIsOpen(false)}
       />
@@ -104,18 +113,16 @@ export default function Navbar() {
                 {item}
               </Link>
             ))}
-
             <div className="mt-auto pt-6">
-             <div className="mt-auto pt-6">
               <Link href="/register">
                 <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                   Get Started Free
                 </Button>
               </Link>
-             </div>            </div>
+            </div>{" "}
           </div>
         </div>
       </div>
     </>
-  )
+  );
 }

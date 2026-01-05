@@ -1,6 +1,6 @@
-import { Button } from "@/components/ui/button"
-import { ArrowRight, Play } from "lucide-react"
-import Link from "next/link"
+import { Button } from "@/components/ui/button";
+import { ArrowRight, Play } from "lucide-react";
+import Link from "next/link";
 
 export default function Hero() {
   return (
@@ -13,10 +13,10 @@ export default function Hero() {
               Generate Beautiful Code Documentation — Instantly.
             </h1>
             <p className="text-lg text-muted-foreground text-balance">
-              PromptDoc uses AI to turn your code into clean, structured documentation with just one prompt. Save hours
-              of writing and keep your docs always in sync.
+              PromptDoc uses AI to turn your code into clean, structured
+              documentation with just one prompt. Save hours of writing and keep
+              your docs always in sync.
             </p>
-
             {/* Trust Badges */}
             <div className="flex flex-col gap-3 pt-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -28,24 +28,29 @@ export default function Hero() {
                 Secure with enterprise-grade encryption
               </div>
             </div>
-
             {/* CTA Buttons */}
-
-
             <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Link href="/signup">
-                <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+              <Link href="/register">
+                <Button
+                  size="lg"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+                >
                   Start for Free
                   <ArrowRight size={18} />
                 </Button>
               </Link>
               <Link href="/demo">
-                <Button size="lg" variant="outline" className="gap-2 bg-transparent">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2 bg-transparent"
+                >
                   <Play size={18} />
                   Watch Demo
                 </Button>
               </Link>
-            </div>          </div>
+            </div>{" "}
+          </div>
 
           {/* Hero Illustration */}
           <div className="relative h-96 lg:h-full min-h-96 rounded-lg bg-gradient-to-br from-primary/10 to-accent/10 border border-border flex items-center justify-center overflow-hidden">
@@ -75,5 +80,5 @@ export default function Hero() {
         </div>
       </div>
     </section>
-  )
+  );
 }
