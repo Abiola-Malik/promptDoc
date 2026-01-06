@@ -1,6 +1,6 @@
-import { Button } from "@/components/ui/button"
-import { ArrowRight, Play } from "lucide-react"
-import Link from "next/link"
+import { Button } from "@/components/ui/button";
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 export default function CTABanner() {
   return (
@@ -11,26 +11,31 @@ export default function CTABanner() {
             Your code deserves world-class documentation.
           </h2>
           <p className="text-lg text-primary-foreground/90 mb-8 max-w-2xl mx-auto">
-            Join thousands of developers who are already saving hours with PromptDoc.
+            Join thousands of developers who are already saving hours with
+            PromptDoc.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" className="bg-primary-foreground hover:bg-primary-foreground/90 text-primary gap-2">
-              <Link href='/register'>
+            <Button
+              asChild
+              size="lg"
+              className="bg-primary-foreground hover:bg-primary-foreground/90 text-primary gap-2"
+            >
+              <Link href="/register">
                 Get Started Free
                 <ArrowRight size={18} />
               </Link>
-            </Button>           
-            <Button
+            </Button>
+            {/* <Button
               size="lg"
               variant="outline"
               className="border-primary-foreground text-primary-foreground hover:bg-primary-foreground/10 gap-2 bg-transparent"
             >
               <Play size={18} />
               View Demo
-            </Button>
+            </Button> */}
           </div>
         </div>
       </div>
     </section>
-  )
+  );
 }

@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { Project } from "@/features/projects/model/project";
+import Image from "next/image";
 
 interface ProjectSidebarProps {
   onUploadClick: () => void;
@@ -70,10 +71,19 @@ export default function ProjectSidebar({
     <div className="flex h-full flex-col bg-sidebar">
       <div className="p-6 border-b border-sidebar-border">
         <h1 className="text-xl font-bold flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold">
-            PD
-          </div>
-          PromptDoc
+          {/* Logo */}
+          <Link
+            href="/"
+            className="flex items-center gap-2 font-bold text-xl text-foreground"
+          >
+            <Image
+              src="/promptdoc-logo.svg"
+              alt="PromptDoc Logo"
+              width={80}
+              height={80}
+            />{" "}
+            PromptDoc
+          </Link>
         </h1>
       </div>
 

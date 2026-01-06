@@ -21,7 +21,7 @@ export default function Navbar() {
     };
   }, [isOpen]);
 
-  const menuItems = ["Features", "Docs", "Pricing", "About", "Login"];
+  const menuItems = ["Features", "About", "Login"];
 
   return (
     <>

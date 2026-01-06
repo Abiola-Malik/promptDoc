@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 
 export default function Hero() {
@@ -39,7 +39,7 @@ export default function Hero() {
                   <ArrowRight size={18} />
                 </Button>
               </Link>
-              <Link href="/demo">
+              {/* <Link href="/demo">
                 <Button
                   size="lg"
                   variant="outline"
@@ -48,7 +48,7 @@ export default function Hero() {
                   <Play size={18} />
                   Watch Demo
                 </Button>
-              </Link>
+              </Link> */}
             </div>{" "}
           </div>
 

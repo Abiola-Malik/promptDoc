@@ -1,12 +1,13 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
+import "./globals.css" assert { type: "css" };
 import { ThemeProvider } from "next-themes";
 import AOSInit from "@/components/AOSinit";
 import { Analytics } from "@vercel/analytics/next";
 import { QueryProvider } from "./providers/query-provider";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import Navbar from "./(home)/components/homepage/navbar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -63,14 +64,6 @@ export const metadata: Metadata = {
     locale: "en_US",
     type: "website",
   },
-  // twitter: {
-  //   card: "summary_large_image",
-  //   title: "Promptdoc - AI Documentation That Writes Itself",
-  //   description:
-  //     "Chat with your codebase and generate perfect docs instantly. Private & secure.",
-  //   images: ["/twitter-image.png"],
-  //   creator: "@yourhandle", // ← Replace with your X handle
-  // },
   robots: {
     index: true,
     follow: true,
@@ -82,9 +75,6 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  // verification: {
-  //   google: "your-google-verification-code", // Add when you have it
-  // },
 };
 
 export const viewport: Viewport = {
@@ -95,6 +85,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
 };
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -103,27 +94,25 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Preload critical resources - SAFE & RELIABLE */}
+        {/* Only preload truly critical above-the-fold images */}
         <link
           rel="preload"
           href="/hero-image.webp"
           as="image"
           type="image/webp"
+          crossOrigin=""
         />
-        <link rel="preload" href="/opengraph-image.png" as="image" />
-
-        {/* Favicon & Icons */}
-        <link rel="icon" href="/favicon.ico" sizes="any" />
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <link rel="manifest" href="/manifest.json" />
+        {/* No OG preload, no manual icons — Next.js handles them via file convention */}
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-promptdoc-bg-base text-promptdoc-text-primary`}
       >
         <AOSInit />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <Navbar />
+            {children}
+          </QueryProvider>
           <Analytics />
           <SpeedInsights />
         </ThemeProvider>

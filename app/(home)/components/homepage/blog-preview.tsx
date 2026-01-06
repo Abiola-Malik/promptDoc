@@ -15,7 +15,7 @@ const blogPosts = [
     title: "AI-Powered Documentation: The Future is Here",
     excerpt:
       "Explore how artificial intelligence is revolutionizing the way we create and maintain technical documentation.",
-    image: "/ai-documentation.jpg",
+    image: "/ai-documentation2.jpg",
   },
   {
     title: "Documentation Best Practices for Open Source",
