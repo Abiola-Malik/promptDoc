@@ -7,7 +7,7 @@ import type { EmbeddingResult } from "./embed.types";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const GEMINI_MODEL = "text-embedding-004";
+const GEMINI_MODEL = "gemini-embedding-001";
 const BATCH_SIZE = 100; // Gemini supports up to 100 per batch
 const CONCURRENCY = 5; // Number of concurrent batch requests
 const MAX_RETRIES = 6;
@@ -16,7 +16,7 @@ export const embedAndStoreCodeChunks = async (
   projectId: string,
   chunks: CodeChunk[],
   pineconeIndex: ReturnType<Pinecone["index"]>,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
 ): Promise<EmbeddingResult> => {
   const result: EmbeddingResult = {
     success: true,
@@ -29,7 +29,7 @@ export const embedAndStoreCodeChunks = async (
   if (chunks.length === 0) return result;
 
   console.log(
-    ` Embedding ${chunks.length} code chunks with Gemini (${GEMINI_MODEL}) in batches of ${BATCH_SIZE}`
+    ` Embedding ${chunks.length} code chunks with Gemini (${GEMINI_MODEL}) in batches of ${BATCH_SIZE}`,
   );
 
   // Pre-generate all IDs (parallel, fast)
@@ -38,7 +38,7 @@ export const embedAndStoreCodeChunks = async (
       index: idx,
       chunk,
       id: await generateChunkId(projectId, chunk),
-    }))
+    })),
   );
 
   const limit = pLimit(CONCURRENCY);
@@ -75,7 +75,7 @@ export const embedAndStoreCodeChunks = async (
 
             if (embeddings.length !== batch.length) {
               throw new Error(
-                `Mismatch: expected ${batch.length} embeddings, got ${embeddings.length}`
+                `Mismatch: expected ${batch.length} embeddings, got ${embeddings.length}`,
               );
             }
 
@@ -114,7 +114,7 @@ export const embedAndStoreCodeChunks = async (
             result.successfulChunks += vectors.length;
             onProgress?.(
               result.successfulChunks + result.failedChunks,
-              chunks.length
+              chunks.length,
             );
 
             return vectors.length;
@@ -130,8 +130,8 @@ export const embedAndStoreCodeChunks = async (
               const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
               console.warn(
                 `Rate limited (attempt ${attempt}/${MAX_RETRIES}), waiting ${delay.toFixed(
-                  0
-                )}ms...`
+                  0,
+                )}ms...`,
               );
               await sleep(delay);
               continue;
@@ -149,7 +149,7 @@ export const embedAndStoreCodeChunks = async (
               });
               onProgress?.(
                 result.successfulChunks + result.failedChunks,
-                chunks.length
+                chunks.length,
               );
               break;
             }
@@ -158,13 +158,13 @@ export const embedAndStoreCodeChunks = async (
             const delay = Math.pow(2, attempt) * 500;
             console.warn(
               `Error on attempt ${attempt}/${MAX_RETRIES}, retrying in ${delay}ms...`,
-              err.message
+              err.message,
             );
             await sleep(delay);
           }
         }
         return 0;
-      })
+      }),
     );
   }
 
@@ -172,7 +172,7 @@ export const embedAndStoreCodeChunks = async (
 
   result.success = result.failedChunks === 0;
   console.log(
-    ` Done! ${result.successfulChunks}/${result.totalChunks} embedded & stored`
+    ` Done! ${result.successfulChunks}/${result.totalChunks} embedded & stored`,
   );
 
   return result;

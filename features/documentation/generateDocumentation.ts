@@ -7,13 +7,13 @@ export async function generateDocumentation(
   userQuery: string,
   intent: string,
   pineconeIndex: ReturnType<Pinecone["index"]>,
-  onChunk?: (chunk: string) => void
+  onChunk?: (chunk: string) => void,
 ): Promise<string> {
   const systemPrompt =
     intent === "generate documentation" ? SYSTEM_PROMPT : CHAT_SYSTEM_PROMPT;
   // Embed the user's query
   const queryEmbedding = await ai.models.embedContent({
-    model: "text-embedding-004",
+    model: "gemini-embedding-001",
     contents: [
       {
         role: "user",
@@ -40,14 +40,14 @@ export async function generateDocumentation(
   const context = searchResults.matches
     .filter(
       (match) =>
-        match.metadata?.content && typeof match.metadata.content === "string"
+        match.metadata?.content && typeof match.metadata.content === "string",
     )
     .map(
       (match, i) => `
 === Code Snippet ${i + 1} (${match.metadata?.filename}) ===
 Lines ${match.metadata?.startLine}-${match.metadata?.endLine}
 ${String(match.metadata?.content).slice(0, 5000)}
-`
+`,
     )
     .join("\n\n");
   // Generate documentation with Gemini
