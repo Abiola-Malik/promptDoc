@@ -9,7 +9,7 @@ import {
   MAX_FILE_SIZE,
   MAX_FILES,
   MAX_TOTAL_SIZE,
-} from "@/constants";
+} from "@/web/constants";
 import { getAllFiles } from "./getAllFiles";
 import { validateZipEntry } from "./validateZipEntry";
 
@@ -24,12 +24,12 @@ import { validateZipEntry } from "./validateZipEntry";
  * to ensure it happens on all code paths, including errors.
  */
 export const extractZipFile = async (
-  filepath: string
+  filepath: string,
 ): Promise<ExtractionResult> => {
   const tempDir = path.join(
     tmpdir(),
     "promptdoc-extractions",
-    `extract-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+    `extract-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
   );
 
   try {
@@ -47,7 +47,7 @@ export const extractZipFile = async (
         const size = entry.header?.size ?? 0;
         return sum + size;
       },
-      0
+      0,
     );
 
     if (totalUncompressedSize > MAX_TOTAL_SIZE) {
@@ -56,7 +56,7 @@ export const extractZipFile = async (
         files: [],
         stats: { totalFiles: 0, totalSize: 0, skipped: 0 },
         error: `ZIP too large: ${(totalUncompressedSize / 1024 / 1024).toFixed(
-          2
+          2,
         )}MB (max ${MAX_TOTAL_SIZE / 1024 / 1024}MB)`,
         extractionPath: tempDir,
       };
@@ -109,7 +109,7 @@ export const extractZipFile = async (
         // Skip files that are too large
         if (stats.size > MAX_FILE_SIZE) {
           console.warn(
-            `Skipping large file: ${path.basename(f)} (${stats.size} bytes)`
+            `Skipping large file: ${path.basename(f)} (${stats.size} bytes)`,
           );
           skippedCount++;
           continue;
@@ -134,8 +134,8 @@ export const extractZipFile = async (
 
     console.log(
       `Extracted ${filesWithContent.length} files (${(totalSize / 1024).toFixed(
-        2
-      )}KB)`
+        2,
+      )}KB)`,
     );
 
     return {

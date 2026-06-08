@@ -1,4 +1,4 @@
-import { MAX_FILE_SIZE } from "@/constants";
+import { MAX_FILE_SIZE } from "@/web/constants";
 import path from "path";
 import AdmZip from "adm-zip";
 /**

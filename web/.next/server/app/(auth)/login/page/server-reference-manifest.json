@@ -1,0 +1,104 @@
+{
+  "node": {
+    "401c947f4954620ce14ac56e508fc7b7c012ea4e1f": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    },
+    "001238308fc8f64c134a06a6ce350979e9b5376e57": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    },
+    "0083f593dfd85a38deaa088d40c512c831dc58a460": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    },
+    "00d4d11785303c9d22b86a7bcee7bc59769dfbcb40": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    },
+    "7f7229bf05b065bad544039c8dd2f11b2429b47248": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    },
+    "7f92df8ff8251ec974e9414fc15650d3d1fbae7c7d": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    },
+    "4094163b3005d46c70e5a1fd5abbe1f5b5e5533193": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    },
+    "60d62d66aaa21a3e0fc81f18a0fefcd44b6912b9d2": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    },
+    "7f22c50b70deb8ecaed7f3131db7b24bbd33486c11": {
+      "workers": {
+        "app/(auth)/login/page": {
+          "moduleId": "[project]/.next-internal/server/app/(auth)/login/page/actions.js { ACTIONS_MODULE0 => \"[project]/app/(auth)/login/page.tsx [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/server/oauth.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE2 => \"[project]/db/appwrite/index.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE3 => \"[project]/lib/helpers.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/(auth)/login/page": "rsc"
+      }
+    }
+  },
+  "edge": {}
+}

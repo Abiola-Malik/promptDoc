@@ -1,0 +1,11 @@
+{
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/(auth)/oauth/route": "app/(auth)/oauth/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/projects/[projectId]/route": "app/api/projects/[projectId]/route.js",
+  "/api/projects/route": "app/api/projects/route.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboard/project/[projectId]/page": "app/dashboard/project/[projectId]/page.js",
+  "/opengraph-image.png/route": "app/opengraph-image.png/route.js",
+  "/page": "app/page.js"
+}

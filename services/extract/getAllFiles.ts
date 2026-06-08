@@ -1,4 +1,4 @@
-import { MAX_FILES } from "@/constants";
+import { MAX_FILES } from "@/web/constants";
 import path from "path";
 import fs from "fs/promises";
 
@@ -7,7 +7,7 @@ import fs from "fs/promises";
  */
 export async function getAllFiles(
   dir: string,
-  maxFiles: number = MAX_FILES
+  maxFiles: number = MAX_FILES,
 ): Promise<string[]> {
   const files: string[] = [];
 

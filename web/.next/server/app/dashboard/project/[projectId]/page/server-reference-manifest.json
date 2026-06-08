@@ -1,0 +1,93 @@
+{
+  "node": {
+    "60fd04d7e029baf343cc4ea4b79e3d5aba639d5952": {
+      "workers": {
+        "app/dashboard/project/[projectId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/project/[projectId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/lib/actions/chats.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/lib/actions/file.actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/project/[projectId]/page": "action-browser"
+      }
+    },
+    "40ba41d5b81ec28dd2a5b95c6236314a453cca5757": {
+      "workers": {
+        "app/dashboard/project/[projectId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/project/[projectId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/lib/actions/chats.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/lib/actions/file.actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/project/[projectId]/page": "action-browser"
+      }
+    },
+    "6031c2b7974d0b9dd034ad61a7e838fd16fff99d2e": {
+      "workers": {
+        "app/dashboard/project/[projectId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/project/[projectId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/lib/actions/chats.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/lib/actions/file.actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/project/[projectId]/page": "action-browser"
+      }
+    },
+    "408bafbaae4c2d61e792f6578d573f2067245b6cd8": {
+      "workers": {
+        "app/dashboard/project/[projectId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/project/[projectId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/lib/actions/chats.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/lib/actions/file.actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/project/[projectId]/page": "action-browser"
+      }
+    },
+    "40fa73fa7fa3f43f58362b8b63c383322debafb1a1": {
+      "workers": {
+        "app/dashboard/project/[projectId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/project/[projectId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/lib/actions/chats.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/lib/actions/file.actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/project/[projectId]/page": "action-browser"
+      }
+    },
+    "604960469f9099431f1dbe748785d22eecf754728a": {
+      "workers": {
+        "app/dashboard/project/[projectId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/project/[projectId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/lib/actions/chats.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/lib/actions/file.actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/project/[projectId]/page": "action-browser"
+      }
+    },
+    "40d684ee9437e966894853b00062eee9726093fbda": {
+      "workers": {
+        "app/dashboard/project/[projectId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/project/[projectId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/lib/actions/chats.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/lib/actions/file.actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/project/[projectId]/page": "action-browser"
+      }
+    },
+    "40d0e42f2f48b5283f4cc5fbbd2e07fa76d16dcb90": {
+      "workers": {
+        "app/dashboard/project/[projectId]/page": {
+          "moduleId": "[project]/.next-internal/server/app/dashboard/project/[projectId]/page/actions.js { ACTIONS_MODULE0 => \"[project]/lib/actions/chats.actions.ts [app-rsc] (ecmascript)\", ACTIONS_MODULE1 => \"[project]/lib/actions/file.actions.ts [app-rsc] (ecmascript)\" } [app-rsc] (server actions loader, ecmascript)",
+          "async": false
+        }
+      },
+      "layer": {
+        "app/dashboard/project/[projectId]/page": "action-browser"
+      }
+    }
+  },
+  "edge": {}
+}

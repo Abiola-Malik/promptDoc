@@ -1,0 +1,16 @@
+services:
+  chunk-service:
+    build: ./services/chunk-service
+    env_file: ./services/chunk-service/.env
+
+  embed-service:
+    build: ./services/embed-service
+    env_file: ./services/embed-service/.env
+    depends_on: [redis]
+
+  rag-service:
+    build: ./services/rag-service
+    env_file: ./services/rag-service/.env
+
+  redis:
+    image: redis:7-alpine
