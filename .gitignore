@@ -13,7 +13,9 @@ node_modules
 
 # testing
 /coverage
-
+#python 
+.venv
+venv
 # next.js
 /.next/
 /out/
@@ -45,3 +47,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+test-project.zip
+/test-project.*
