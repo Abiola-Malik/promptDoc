@@ -121,4 +121,4 @@ __pypackages__/
 
 # Keep tests and app caches ignored explicitly
 tests/__pycache__/
-app/__pycache__/
+app/__pycache__/web/.next/
