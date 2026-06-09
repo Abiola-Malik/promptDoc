@@ -1,11 +1,11 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/lib/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@/lib/components/ui/tooltip";
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
 import type { Project } from "@/features/projects/model/project";

@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+import { Card } from "@/lib/components/ui/card";
 import { Upload, Zap, Download } from "lucide-react";
 
 const steps = [

@@ -12,8 +12,8 @@ import {
   Eye,
   Loader2,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/lib/components/ui/input";
+import { Button } from "@/lib/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getProjectFiles } from "@/lib/actions/file.actions";

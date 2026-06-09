@@ -4,7 +4,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/lib/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { Project } from "@/features/projects/model/project";
 import Image from "next/image";

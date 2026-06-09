@@ -6,7 +6,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/lib/components/ui/card";
 import Link from "next/link";
 import { signInWithGitHub, signUpWithGoogle } from "@/server/oauth";
 import { SignInFormClient } from "@/app/(auth)/components/auth/SignInFormClient";

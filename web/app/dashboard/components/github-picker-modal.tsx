@@ -5,11 +5,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
+} from "@/lib/components/ui/dialog";
+import { Button } from "@/lib/components/ui/button";
+import { Input } from "@/lib/components/ui/input";
+import { ScrollArea } from "@/lib/components/ui/scroll-area";
+import { Badge } from "@/lib/components/ui/badge";
 import { GithubRepo } from "@/features/github/models/github";
 
 type Step = "repos" | "confirm";

@@ -5,7 +5,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/lib/components/ui/card";
 import { Project } from "@/features/projects/model/project";
 import { Loader2, AlertCircle } from "lucide-react";
 

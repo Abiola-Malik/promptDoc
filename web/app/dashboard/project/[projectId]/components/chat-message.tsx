@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useEffect, useState, useMemo, memo } from "react";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/lib/components/ui/button";
+import { Textarea } from "@/lib/components/ui/textarea";
 import {
   Send,
   Loader2,

@@ -7,7 +7,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from "@/lib/components/ui/card";
 import Link from "next/link";
 import { signUpWithGoogle } from "@/server/oauth";
 import { SignUpFormClient } from "@/app/(auth)/components/auth/SignUpFormClient";

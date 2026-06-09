@@ -9,12 +9,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
+} from "@/lib/components/ui/dialog";
+import { Button } from "@/lib/components/ui/button";
+import { Input } from "@/lib/components/ui/input";
+import { Label } from "@/lib/components/ui/label";
+import { Checkbox } from "@/lib/components/ui/checkbox";
+import { Progress } from "@/lib/components/ui/progress";
 import {
   AlertCircle,
   CheckCircle2,

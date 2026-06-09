@@ -4,7 +4,7 @@
 import React, { useEffect, useState, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { ProjectHeader } from "./components/project-header";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/lib/components/ui/tabs";
 import { Loader2, AlertCircle } from "lucide-react";
 import { useProject } from "@/hooks/useProjects";
 import { useTabsStore } from "@/stores/TabStore";

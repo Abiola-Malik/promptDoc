@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+import { Card } from "@/lib/components/ui/card";
 import { Zap, GitBranch, Download, Users } from "lucide-react";
 
 const features = [

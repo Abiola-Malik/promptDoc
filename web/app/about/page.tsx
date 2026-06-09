@@ -1,13 +1,13 @@
 // app/about/page.tsx
-import { Button } from "@/components/ui/button";
+import { Button } from "@/lib/components/ui/button";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+} from "@/lib/components/ui/card";
+import { Badge } from "@/lib/components/ui/badge";
 import Link from "next/link";
 import {
   Sparkles,

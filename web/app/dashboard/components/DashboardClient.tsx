@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ProjectCard } from "./project-card";
 import GithubPickerModal from "./github-picker-modal";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/lib/components/ui/button";
 import { Upload, Github } from "lucide-react";
 import { GithubRepo } from "@/features/github/models/github";
 import { UploadModal } from "./upload-modal";

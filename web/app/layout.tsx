@@ -7,7 +7,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { QueryProvider } from "./providers/query-provider";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import Navbar from "./(home)/components/homepage/navbar";
-import AOSInit from "@/components/AOSinit";
+import AOSInit from "@/lib/components/AOSinit";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

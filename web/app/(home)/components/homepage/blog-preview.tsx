@@ -1,8 +1,8 @@
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card } from "@/lib/components/ui/card";
+import { Button } from "@/lib/components/ui/button";
 
 const blogPosts = [
   {
