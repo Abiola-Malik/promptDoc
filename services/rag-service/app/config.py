@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -9,6 +11,7 @@ class Settings(BaseSettings):
     pinecone_index_name: str = "promptdoc"
     pinecone_host: str = ""
     internal_api_secret: str = ""
+    batch_size: int = 128
     max_retrieval_results: int = 8
     max_context_chunks: int = 12
     max_critique_loops: int = 2
