@@ -5,11 +5,11 @@ from pydantic import SecretStr
 from langchain_google_genai import ChatGoogleGenerativeAI
 from app.config import settings
 
-'''
-it initializes a singleton instance of the ChatGoogleGenerativeAI LLM with the configured API key and temperature settings. The LLM is used for generating responses to user queries in the RAG service.
+# '''
+# it initializes a singleton instance of the ChatGoogleGenerativeAI LLM with the configured API key and temperature settings. The LLM is used for generating responses to user queries in the RAG service.
 
-the first line creates a global variable _llm to hold the singleton instance of the LLM. The get_llm() function checks if _llm is None, and if so, it creates a new instance of ChatGoogleGenerativeAI with the configured model, API key, temperature, and streaming settings. It then returns the singleton instance of the LLM.
-'''
+# the first line creates a global variable _llm to hold the singleton instance of the LLM. The get_llm() function checks if _llm is None, and if so, it creates a new instance of ChatGoogleGenerativeAI with the configured model, API key, temperature, and streaming settings. It then returns the singleton instance of the LLM.
+# '''
 
 
 _llm: ChatGoogleGenerativeAI | None = None
@@ -28,4 +28,4 @@ def get_llm() -> ChatGoogleGenerativeAI:
                 )
     return _llm
 
-'''this approach saved memory and reduces potential API bottlenecks by reusing the same LLM instance across multiple requests, rather than creating a new instance for each request. as i noticed in the log files of the embed-service which creates a new pinecone client for each request, which made the upserts super slow.'''
+# '''this approach saved memory and reduces potential API bottlenecks by reusing the same LLM instance across multiple requests, rather than creating a new instance for each request. as i noticed in the log files of the embed-service which creates a new pinecone client for each request, which made the upserts super slow.'''

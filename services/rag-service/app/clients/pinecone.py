@@ -10,9 +10,9 @@ from pinecone import Index
 
 
 
-'''
-implemented the same singleton pattern for both the Pinecone client and the embedder to avoid unnecessary re-instantiations, which can be costly in terms of performance. The get_vectorstore function now checks if the Pinecone client and index have already been created before initializing them, ensuring that we reuse existing instances whenever possible.
-'''
+# '''
+# implemented the same singleton pattern for both the Pinecone client and the embedder to avoid unnecessary re-instantiations, which can be costly in terms of performance. The get_vectorstore function now checks if the Pinecone client and index have already been created before initializing them, ensuring that we reuse existing instances whenever possible.
+# '''
 
 
 
