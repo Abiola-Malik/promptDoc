@@ -25,6 +25,8 @@ def get_llm() -> ChatGoogleGenerativeAI:
                     google_api_key=SecretStr(cast(str, settings.gemini_api_key)),
                     temperature=settings.temperature,
                     streaming=True,
+                    max_retries=3,
+                    timeout=60,
                 )
     return _llm
 
