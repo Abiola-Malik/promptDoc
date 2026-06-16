@@ -7,14 +7,70 @@ import { Button } from "@/lib/components/ui/button";
 import { Upload, Github } from "lucide-react";
 import { GithubRepo } from "@/features/github/models/github";
 import { UploadModal } from "./upload-modal";
+import { useRouter } from "next/navigation";
 
 export default function DashboardClient({ projects }: { projects: any[] }) {
   const [zipOpen, setZipOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
+  const router = useRouter();
 
-  function handleRepoSelected(repo: GithubRepo, fileCount: number) {
-    // TODO Phase 4: wire to /api/ingest once chunk-service is built
-    console.log("repo selected", repo.full_name, fileCount, "files");
+  async function handleRepoSelected(repo: GithubRepo, fileCount: number) {
+    try {
+      // get github token from session
+      const tokenRes = await fetch("/api/github/token");
+      if (!tokenRes.ok) {
+        const txt = await tokenRes.text().catch(() => "");
+        console.error("Failed to fetch GitHub token:", txt || tokenRes.status);
+        alert("Failed to authenticate GitHub access. Please sign in again.");
+        return;
+      }
+
+      const tokenJson = await tokenRes.json().catch(() => ({}));
+      const token = tokenJson?.token;
+      if (!token) {
+        console.error("No GitHub token returned", tokenJson);
+        alert("No GitHub token available. Please connect your GitHub account.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("source", "github");
+      formData.append("name", repo.name);
+      formData.append("repo", repo.full_name);
+      formData.append("branch", repo.default_branch || "main");
+      formData.append("token", token);
+
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        // try JSON then fall back to text
+        let errMsg = "Ingest request failed";
+        try {
+          const parsed = await res.json();
+          errMsg = parsed?.error || parsed?.detail || JSON.stringify(parsed);
+        } catch {
+          errMsg = (await res.text().catch(() => "")) || errMsg;
+        }
+        console.error("Ingest failed:", errMsg);
+        alert(`Failed to start import: ${errMsg}`);
+        return;
+      }
+
+      const data = await res.json().catch(() => ({}));
+      if (data.success) {
+        router.push(`/dashboard/project/${data.projectId}`);
+      } else {
+        const msg = data?.message || data?.error || "Unknown error";
+        console.error("Ingest did not succeed:", data);
+        alert(`Import failed: ${msg}`);
+      }
+    } catch (err) {
+      console.error("Error during repo import:", err);
+      alert("An unexpected error occurred while importing the repository.");
+    }
   }
 
   const ActionButtons = (

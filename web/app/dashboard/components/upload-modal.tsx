@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, JSX } from "react";
+import React, { useState, useCallback, JSX, useRef, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import JSZip from "jszip";
 import {
@@ -71,6 +71,11 @@ export function UploadModal({
   const [error, setError] = useState<string | null>(null);
 
   const reset = () => {
+    // clear any active polling interval when resetting
+    if (pollRef.current !== null) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
     setState("idle");
     setFileTree(null);
     setProjectName("");
@@ -81,6 +86,18 @@ export function UploadModal({
     setProgress(0);
     setError(null);
   };
+
+  // ref to store polling interval id so we can clear it on unmount or reset
+  const pollRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current !== null) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
 
   /**
    * Build file-tree from ZIP
@@ -314,30 +331,86 @@ export function UploadModal({
       }
 
       const data = await res.json();
-
-      setProgress(90);
+      setProgress(20);
       setState("processing");
 
-      // Redirect to project page
-      setTimeout(() => {
+      // poll job status until complete
+      if (data.jobId) {
+        // stop polling after several consecutive failures to avoid infinite polling
+        let consecutiveFailures = 0;
+        const MAX_POLL_RETRIES = 5;
+
+        pollRef.current = window.setInterval(async () => {
+          try {
+            const statusRes = await fetch(
+              `/api/ingest/status?jobId=${data.jobId}`,
+            );
+            if (!statusRes.ok) {
+              consecutiveFailures++;
+              if (consecutiveFailures >= MAX_POLL_RETRIES) {
+                if (pollRef.current !== null) {
+                  clearInterval(pollRef.current);
+                  pollRef.current = null;
+                }
+                setError("Processing error. Please try again later.");
+                setState("error");
+              }
+              return;
+            }
+
+            // successful response -> reset failure counter
+            consecutiveFailures = 0;
+            const status = await statusRes.json();
+
+            const pct = Math.round(status.progress_pct ?? 0);
+            setProgress(20 + Math.round(pct * 0.75)); // 20-95% range
+
+            if (status.status === "complete" || status.status === "partial") {
+              if (pollRef.current !== null) {
+                clearInterval(pollRef.current);
+                pollRef.current = null;
+              }
+              setProgress(100);
+              setState("complete");
+              setTimeout(() => {
+                router.push(`/dashboard/project/${data.projectId}`);
+                onOpenChange(false);
+              }, 800);
+            }
+
+            if (status.status === "failed") {
+              if (pollRef.current !== null) {
+                clearInterval(pollRef.current);
+                pollRef.current = null;
+              }
+              setError("Processing failed. Please try again.");
+              setState("error");
+            }
+          } catch (err) {
+            consecutiveFailures++;
+            if (consecutiveFailures >= MAX_POLL_RETRIES) {
+              if (pollRef.current !== null) {
+                clearInterval(pollRef.current);
+                pollRef.current = null;
+              }
+              setError("Network error while polling status. Please try again.");
+              setState("error");
+            }
+          }
+        }, 2000); // poll every 2 seconds
+      } else {
+        // cached project — skip polling
         setProgress(100);
         setState("complete");
-
         setTimeout(() => {
           router.push(`/dashboard/project/${data.projectId}`);
           onOpenChange(false);
         }, 800);
-      }, 1200);
-    } catch (err: unknown) {
-      if (!(err instanceof Error)) return;
-      if (err.message.includes("Unauthorized")) {
-        setError("Session expired. Please log in again.");
-      } else {
-        setError(err.message);
       }
+    } catch (err) {
       console.error(err);
-      setError(err.message);
-      setState("error");
+      setError("Upload failed. Please try again.");
+      setState("idle");
     }
   };
 

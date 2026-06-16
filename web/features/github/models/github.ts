@@ -6,6 +6,7 @@ export type GithubRepo = {
   updated_at: string;
   language: string | null;
   description: string | null;
+  default_branch?: string;
 };
 
 export type GithubTreeItem = {

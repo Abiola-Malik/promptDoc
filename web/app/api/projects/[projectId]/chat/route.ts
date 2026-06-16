@@ -1,158 +1,188 @@
-// app/api/projects/[projectId]/chat/route.ts
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/helpers";
 import { createSessionClient } from "@/db/appwrite";
 import { appwriteConfig } from "@/db/appwrite/config";
-import { index } from "@/db/pinecone";
-import { generateDocumentation } from "../../../../../../documentation/generateDocumentation";
+import { AppwriteException, Models } from "node-appwrite";
 
 const { DatabaseId, projectsCollectionId } = appwriteConfig;
-interface RouteContext {
-  params: Promise<{ projectId: string }>;
-}
 
-export async function POST(request: NextRequest, context: RouteContext) {
-  const { projectId } = await context.params;
+const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL!;
+const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET!;
 
-  if (!projectId) {
-    return new Response("Missing projectId", { status: 400 });
+export const runtime = "nodejs";
+export const maxDuration = 120;
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { projectId: string } },
+) {
+  const { projectId } = params;
+  const sessionResult = await getSession();
+  if (!sessionResult.success) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Authorization: ensure the authenticated user owns the requested project
   try {
-    const sessionResult = await getSession();
-    if (!sessionResult.session) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
     const { databases, account } = await createSessionClient(
-      sessionResult.session,
-    );
-    const user = await account.get();
-
-    const project = await databases.getDocument(
-      DatabaseId,
-      projectsCollectionId,
-      projectId,
+      sessionResult.session!,
     );
 
-    const projectUserId =
-      typeof project.userId === "string" ? project.userId : project.userId.$id;
-    if (projectUserId !== user.$id) {
-      return new Response("Forbidden", { status: 403 });
+    let user: Models.User | undefined;
+    try {
+      user = await account.get();
+    } catch (err) {
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { message, intent } = body;
+    // fetch project and verify ownership
+    try {
+      const projectDoc = await databases.getDocument(
+        DatabaseId,
+        projectsCollectionId,
+        projectId,
+      );
+      const projectUserId =
+        typeof projectDoc.userId === "string"
+          ? projectDoc.userId
+          : projectDoc.userId?.$id;
 
-    if (!message) {
-      return new Response("Message required", { status: 400 });
+      if (projectUserId !== user.$id) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } catch (err) {
+      if (err instanceof AppwriteException && err.code === 404) {
+        return NextResponse.json(
+          { error: "Project not found" },
+          { status: 404 },
+        );
+      }
+      console.error("Error fetching project for authorization:", err);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
+  } catch (err) {
+    console.error("Authorization check failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
 
-    if (intent === "generate documentation") {
+  const body = await request.json();
+  const { message, intent } = body;
+
+  if (!message?.trim()) {
+    return NextResponse.json({ error: "Message required" }, { status: 400 });
+  }
+
+  // map frontend intent to rag-service intent_hint
+  const intentHint = intent === "generate documentation" ? "doc_gen" : "qa";
+
+  try {
+    const ragResponse = await fetch(`${RAG_SERVICE_URL}/query`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-internal-secret": INTERNAL_API_SECRET,
+      },
+      body: JSON.stringify({
+        query: message,
+        project_id: projectId,
+        intent_hint: intentHint,
+      }),
+    });
+
+    if (!ragResponse.ok) {
+      // rag service may return non-JSON (plain text or HTML) on errors.
+      // try to parse JSON, otherwise fall back to text so we can forward
+      // the real error message and status code to the client.
+      let errMessage = "RAG service error";
       try {
-        const fullContent = await generateDocumentation(
-          projectId,
-          message,
-          intent,
-          index,
-        );
-
-        // smart filename creation based on user query
-        const lower = message.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-        let filename = `generated-doc.md`;
-        if (lower.includes("readme")) filename = "README.md";
-        else if (lower.includes("contributing")) filename = "CONTRIBUTING.md";
-        else if (lower.includes("changelog")) filename = "CHANGELOG.md";
-        else if (lower.includes("api")) filename = "docs/API.md";
-        else if (lower.includes("component")) filename = "docs/COMPONENTS.md";
-        const title =
-          message.charAt(0).toUpperCase() + message.slice(1).replace(/\?$/, "");
-        return new Response(
-          JSON.stringify({
-            file: {
-              filename,
-              content: fullContent.trim(),
-              title,
-            },
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      } catch (error) {
-        if (error instanceof Error) {
-          return new Response(JSON.stringify({ error: error.message }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
-        } else {
-          return new Response(JSON.stringify({ error: "Unknown error" }), {
-            status: 500,
-            headers: { "Content-Type": "application/json" },
-          });
+        const parsed = await ragResponse.json();
+        errMessage = parsed?.detail || parsed?.error || JSON.stringify(parsed);
+      } catch (parseErr) {
+        try {
+          const txt = await ragResponse.text();
+          if (txt) errMessage = txt;
+        } catch {
+          // ignore, keep generic message
         }
       }
+
+      return NextResponse.json(
+        { error: errMessage || "RAG service error" },
+        { status: ragResponse.status },
+      );
     }
 
+    // pipe the SSE stream directly to the client
+    // translate rag-service event types to what useChat.ts expects:
+    // rag-service emits: {type: "token"} → useChat expects: {type: "chunk"}
+    // rag-service emits: {type: "node"}  → useChat expects: ignored
+    // rag-service emits: {type: "done"}  → useChat expects: {type: "done"}
     const encoder = new TextEncoder();
+    const ragReader = ragResponse.body!.getReader();
+    const decoder = new TextDecoder();
+
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "start" })}\n\n`),
-          );
+          let buffer = "";
+          while (true) {
+            const { done, value } = await ragReader.read();
+            if (done) break;
 
-          await generateDocumentation(
-            projectId,
-            message,
-            intent,
-            index,
-            (chunk) => {
-              controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({
-                    type: "chunk",
-                    content: chunk,
-                  })}\n\n`,
-                ),
-              );
-            },
-          );
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
 
-          controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`),
-          );
-          controller.close();
-        } catch (err: unknown) {
-          const errorMessage =
-            err instanceof Error ? err.message : "Unknown error";
-          controller.enqueue(
-            encoder.encode(
-              `data: ${JSON.stringify({
-                type: "error",
-                error: errorMessage,
-              })}\n\n`,
-            ),
-          );
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              try {
+                const event = JSON.parse(line.slice(6));
+
+                if (event.type === "token") {
+                  // translate token → chunk for useChat.ts compatibility
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ type: "chunk", content: event.content })}\n\n`,
+                    ),
+                  );
+                } else if (event.type === "done") {
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ type: "done" })}\n\n`,
+                    ),
+                  );
+                } else if (event.type === "error") {
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ type: "error", error: event.message })}\n\n`,
+                    ),
+                  );
+                }
+                // node events are internal — skip them
+              } catch {
+                continue;
+              }
+            }
+          }
+        } finally {
           controller.close();
         }
       },
     });
 
-    return new Response(stream, {
+    return new NextResponse(stream, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
         Connection: "keep-alive",
       },
     });
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error("Chat API error:", error.message);
-      return new Response("Internal error", { status: 500 });
-    } else {
-      console.error("Chat API error:", error);
-    }
+  } catch (error) {
+    console.error("Chat proxy error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Internal error" },
+      { status: 500 },
+    );
   }
 }
