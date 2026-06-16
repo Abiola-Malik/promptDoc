@@ -16,5 +16,9 @@ class Settings(BaseSettings):
     max_context_chunks: int = 12
     max_critique_loops: int = 2
     temperature: float = 0.2
+    langchain_tracing: str = "false"
+    langchain_api_key: str = ""
+    langsmith_project: str = "promptdoc-rag"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
 
 settings = Settings()

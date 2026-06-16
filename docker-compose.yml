@@ -17,6 +17,9 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   embed-service:
     build: ./services/embed-service
@@ -28,6 +31,9 @@ services:
       redis:
         condition: service_healthy
     restart: on-failure
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   embed-worker:
     build: ./services/embed-service
@@ -37,3 +43,20 @@ services:
         condition: service_healthy
     command: ["python", "-m", "app.worker"]
     restart: on-failure
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+  rag-service:
+    build: ./services/rag-service
+    ports:
+      - "8003:8000"
+    env_file: ./services/rag-service/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      embed-service:
+        condition: service_started
+    restart: on-failure
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4

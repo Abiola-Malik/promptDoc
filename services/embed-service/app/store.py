@@ -5,14 +5,17 @@ from app.embedder import get_embedder
 from app.config import settings
 from app.models import ChunkPayload
 from typing import cast
-
+import threading
 _pinecone_client: Pinecone | None = None
 _index = None
+_lock = threading.Lock()
 
 def get_index():
     global _pinecone_client, _index
     if _pinecone_client is None:
-        _pinecone_client = Pinecone(api_key=settings.pinecone_api_key)
+        with _lock:
+            if _pinecone_client is None:
+                _pinecone_client = Pinecone(api_key=settings.pinecone_api_key)
         _index = _pinecone_client.Index(
             name=settings.pinecone_index_name,
             host=settings.pinecone_host
