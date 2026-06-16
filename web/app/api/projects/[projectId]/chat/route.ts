@@ -14,9 +14,9 @@ export const maxDuration = 120;
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } },
+  { params }: { params: Promise<{ projectId: string }> },
 ) {
-  const { projectId } = params;
+  const { projectId } = await params;
   const sessionResult = await getSession();
   if (!sessionResult.success) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -31,7 +31,7 @@ export async function POST(
     let user: Models.User | undefined;
     try {
       user = await account.get();
-    } catch (err) {
+    } catch {
       return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
 
@@ -97,7 +97,7 @@ export async function POST(
       try {
         const parsed = await ragResponse.json();
         errMessage = parsed?.detail || parsed?.error || JSON.stringify(parsed);
-      } catch (parseErr) {
+      } catch {
         try {
           const txt = await ragResponse.text();
           if (txt) errMessage = txt;

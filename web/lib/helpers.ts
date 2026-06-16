@@ -1,5 +1,15 @@
 "use server";
-import { CodeChunk } from "@/services/chunk/chunk.types";
+// Local minimal `CodeChunk` type: the original shared type was removed/moved.
+// We only need `metadata.filename` and `metadata.chunkIndex` for ID generation.
+export interface CodeChunk {
+  content?: string;
+  metadata: {
+    filename: string;
+    chunkIndex: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
 import { cookies } from "next/headers";
 
 export const getSession = async () => {
@@ -24,7 +34,7 @@ export const getSession = async () => {
  */
 export async function generateChunkId(
   projectId: string,
-  chunk: CodeChunk
+  chunk: CodeChunk,
 ): Promise<string> {
   const { filename, chunkIndex } = chunk.metadata;
   const sanitizedFilename = filename

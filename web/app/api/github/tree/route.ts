@@ -2,6 +2,12 @@ import { createSessionClient } from "@/db/appwrite";
 import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
+interface GitHubTreeItem {
+  path: string;
+  type: "blob" | "tree";
+  sha: string;
+  url: string;
+}
 const SUPPORTED_EXTENSIONS = [
   ".ts",
   ".tsx",
@@ -118,7 +124,7 @@ export async function GET(request: NextRequest) {
 
     // filter to supported code files only
     const filtered = treeData.tree.filter(
-      (item: any) =>
+      (item: GitHubTreeItem) =>
         item.type === "blob" &&
         SUPPORTED_EXTENSIONS.some((ext) => item.path.endsWith(ext)),
     );

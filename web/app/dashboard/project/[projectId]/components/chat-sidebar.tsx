@@ -1,7 +1,7 @@
 // app/dashboard/project/[projectId]/components/chat-sidebar.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/lib/components/ui/button";
 import { ScrollArea } from "@/lib/components/ui/scroll-area";
 import { Plus, MessageSquare, Trash2, Edit2 } from "lucide-react";
@@ -30,11 +30,7 @@ export function ChatSidebar({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
 
-  useEffect(() => {
-    loadChats();
-  }, [projectId]);
-
-  const loadChats = async () => {
+  const loadChats = useCallback(async () => {
     try {
       setIsLoading(true);
       const projectChats = await getProjectChats(projectId);
@@ -49,7 +45,11 @@ export function ChatSidebar({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [projectId, activeChatId, onSelectChat]);
+
+  useEffect(() => {
+    loadChats();
+  }, [loadChats]);
 
   const handleCreateChat = async () => {
     try {

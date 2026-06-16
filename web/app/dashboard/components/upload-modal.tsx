@@ -386,7 +386,7 @@ export function UploadModal({
               setError("Processing failed. Please try again.");
               setState("error");
             }
-          } catch (err) {
+          } catch {
             consecutiveFailures++;
             if (consecutiveFailures >= MAX_POLL_RETRIES) {
               if (pollRef.current !== null) {

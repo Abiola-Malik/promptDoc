@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
     const status = await res.json();
     return NextResponse.json(status);
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Failed to fetch job status" },
       { status: 500 },

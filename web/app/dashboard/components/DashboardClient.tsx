@@ -8,13 +8,17 @@ import { Upload, Github } from "lucide-react";
 import { GithubRepo } from "@/features/github/models/github";
 import { UploadModal } from "./upload-modal";
 import { useRouter } from "next/navigation";
+import { Project } from "@/features/projects/model/project";
 
-export default function DashboardClient({ projects }: { projects: any[] }) {
+export default function DashboardClient({ projects }: { projects: Project[] }) {
   const [zipOpen, setZipOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
   const router = useRouter();
 
-  async function handleRepoSelected(repo: GithubRepo, fileCount: number) {
+  async function handleRepoSelected(repo: GithubRepo, _fileCount: number) {
+    // reference _fileCount to satisfy lint rules when it's unused
+    void _fileCount;
+
     try {
       // get github token from session
       const tokenRes = await fetch("/api/github/token");

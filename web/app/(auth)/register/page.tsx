@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/lib/components/ui/card";
 import Link from "next/link";
-import { signUpWithGoogle } from "@/server/oauth";
+import { signUpWithGoogle, signInWithGitHub } from "@/server/oauth";
 import { SignUpFormClient } from "@/app/(auth)/components/auth/SignUpFormClient";
 const page = async () => {
   async function handleSubmit(formdata: FormData) {
@@ -105,6 +105,7 @@ const page = async () => {
           <SignUpFormClient
             handleSubmit={handleSubmit}
             signUpWithGoogle={signUpWithGoogle}
+            signInWithGitHub={signInWithGitHub}
           />
 
           <p className="text-center text-sm text-muted-foreground">
