@@ -1,39 +1,37 @@
-// app/dashboard/components/DashboardClient.tsx
 "use client";
+
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { ProjectCard } from "./project-card";
 import GithubPickerModal from "./github-picker-modal";
+import { UploadModal } from "./upload-modal";
 import { Button } from "@/lib/components/ui/button";
 import { Upload, Github } from "lucide-react";
-import { GithubRepo } from "@/features/github/models/github";
-import { UploadModal } from "./upload-modal";
-import { useRouter } from "next/navigation";
-import { Project } from "@/features/projects/model/project";
+import type { GithubRepo } from "@/features/github/models/github";
+import type { Project } from "@/features/projects/model/project";
 
 export default function DashboardClient({ projects }: { projects: Project[] }) {
   const [zipOpen, setZipOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const router = useRouter();
 
   async function handleRepoSelected(repo: GithubRepo, _fileCount: number) {
-    // reference _fileCount to satisfy lint rules when it's unused
+    // intentionally reference `_fileCount` to satisfy linter for unused param
     void _fileCount;
 
+    setImportError(null);
+    setImporting(true);
     try {
-      // get github token from session
       const tokenRes = await fetch("/api/github/token");
       if (!tokenRes.ok) {
-        const txt = await tokenRes.text().catch(() => "");
-        console.error("Failed to fetch GitHub token:", txt || tokenRes.status);
-        alert("Failed to authenticate GitHub access. Please sign in again.");
+        setImportError("GitHub authentication failed. Please sign in again.");
         return;
       }
-
-      const tokenJson = await tokenRes.json().catch(() => ({}));
-      const token = tokenJson?.token;
+      const { token } = await tokenRes.json();
       if (!token) {
-        console.error("No GitHub token returned", tokenJson);
-        alert("No GitHub token available. Please connect your GitHub account.");
+        setImportError("No GitHub token available. Reconnect your account.");
         return;
       }
 
@@ -48,84 +46,79 @@ export default function DashboardClient({ projects }: { projects: Project[] }) {
         method: "POST",
         body: formData,
       });
+      const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        // try JSON then fall back to text
-        let errMsg = "Ingest request failed";
-        try {
-          const parsed = await res.json();
-          errMsg = parsed?.error || parsed?.detail || JSON.stringify(parsed);
-        } catch {
-          errMsg = (await res.text().catch(() => "")) || errMsg;
-        }
-        console.error("Ingest failed:", errMsg);
-        alert(`Failed to start import: ${errMsg}`);
+      if (!res.ok || !data.success) {
+        setImportError(data?.error || data?.detail || "Import failed.");
         return;
       }
 
-      const data = await res.json().catch(() => ({}));
-      if (data.success) {
-        router.push(`/dashboard/project/${data.projectId}`);
-      } else {
-        const msg = data?.message || data?.error || "Unknown error";
-        console.error("Ingest did not succeed:", data);
-        alert(`Import failed: ${msg}`);
-      }
-    } catch (err) {
-      console.error("Error during repo import:", err);
-      alert("An unexpected error occurred while importing the repository.");
+      router.push(`/dashboard/project/${data.projectId}`);
+    } catch {
+      setImportError("An unexpected error occurred.");
+    } finally {
+      setImporting(false);
     }
   }
 
-  const ActionButtons = (
-    <div className="flex gap-3">
-      <Button onClick={() => setZipOpen(true)} variant="outline">
-        <Upload className="w-4 h-4 mr-2" />
+  const actions = (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setZipOpen(true)}
+        className="h-8 text-xs border-[#1f1f1f] bg-transparent hover:bg-[#141414] text-[#999]"
+      >
+        <Upload className="w-3 h-3 mr-1.5" />
         Upload ZIP
       </Button>
-      <Button onClick={() => setGithubOpen(true)}>
-        <Github className="w-4 h-4 mr-2" />
-        Import from GitHub
+      <Button
+        size="sm"
+        onClick={() => setGithubOpen(true)}
+        disabled={importing}
+        className="h-8 text-xs bg-[#1f1f1f] hover:bg-[#2a2a2a] text-[#ededed] border-0"
+      >
+        <Github className="w-3 h-3 mr-1.5" />
+        {importing ? "Importing..." : "Import from GitHub"}
       </Button>
     </div>
   );
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto">
-      {projects.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 space-y-4">
-          <svg
-            className="w-16 h-16 text-muted-foreground"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+    <div className="px-8 py-8 max-w-5xl mx-auto">
+      {/* error banner */}
+      {importError && (
+        <div className="mb-6 px-3 py-2 rounded-md bg-red-950/40 border border-red-900/50 text-red-400 text-xs">
+          {importError}
+          <button
+            onClick={() => setImportError(null)}
+            className="ml-3 underline underline-offset-2 opacity-70 hover:opacity-100"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M3 7l9-4 9 4m0 0v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7"
-            />
-          </svg>
-          <h2 className="text-2xl font-semibold">No projects yet</h2>
-          <p className="text-muted-foreground text-center max-w-sm">
-            Upload a ZIP file or import directly from a GitHub repository to get
-            started.
+            dismiss
+          </button>
+        </div>
+      )}
+
+      {projects.length === 0 ? (
+        /* ── empty state ── */
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+          <p className="text-sm text-[#555]">No projects yet</p>
+          <p className="text-xs text-[#444] text-center max-w-xs">
+            Upload a ZIP or import a GitHub repository to index your codebase.
           </p>
-          {ActionButtons}
+          {actions}
         </div>
       ) : (
+        /* ── project list ── */
         <>
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h1 className="text-3xl font-bold mb-2">Your Projects</h1>
-              <p className="text-muted-foreground">
-                Upload and manage your code projects
-              </p>
-            </div>
-            {ActionButtons}
+          <div className="flex items-center justify-between mb-6">
+            <span className="text-xs text-[#555] uppercase tracking-widest">
+              Projects · {projects.length}
+            </span>
+            {actions}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {projects.map((project) => (
               <ProjectCard key={project.$id} project={project} />
             ))}

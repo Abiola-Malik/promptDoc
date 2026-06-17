@@ -4,9 +4,12 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.375rem;
 
-  /* Promptdoc Light Theme */
+  /* ── Promptdoc design tokens ──────────────────────────────────────────── */
+  /* Light theme kept for the marketing site (home, login, register pages). */
+  /* The dashboard always renders dark regardless of system theme — see */
+  /* the .dashboard-dark override block below. */
   --promptdoc-primary: #2563eb;
   --promptdoc-primary-hover: #1e40af;
   --promptdoc-secondary: #14b8a6;
@@ -24,7 +27,6 @@
   --promptdoc-text-secondary: #4b5563;
   --promptdoc-text-muted: #9ca3af;
 
-  /* Map Promptdoc colors to Shadcn variables */
   --primary: #2563eb;
   --primary-foreground: #ffffff;
   --secondary: #f3f4f6;
@@ -45,14 +47,12 @@
   --popover: #ffffff;
   --popover-foreground: #111827;
 
-  /* Chart colors */
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
 
-  /* Sidebar colors */
   --sidebar: #ffffff;
   --sidebar-foreground: #111827;
   --sidebar-primary: #2563eb;
@@ -64,61 +64,60 @@
 }
 
 .dark {
-  /* Promptdoc Dark Theme */
-  --promptdoc-primary: #3b82f6;
-  --promptdoc-primary-hover: #60a5fa;
+  --promptdoc-primary: #3ecf8e;
+  --promptdoc-primary-hover: #4ee0a0;
   --promptdoc-secondary: #10b981;
   --promptdoc-secondary-hover: #34d399;
-  --promptdoc-accent: #10b981;
-  --promptdoc-accent-hover: #34d399;
-  --promptdoc-success: #22c55e;
-  --promptdoc-warning: #facc15;
+  --promptdoc-accent: #3ecf8e;
+  --promptdoc-accent-hover: #4ee0a0;
+  --promptdoc-success: #3ecf8e;
+  --promptdoc-warning: #f59e0b;
   --promptdoc-error: #ef4444;
-  --promptdoc-bg-base: #121212;
-  --promptdoc-bg-surface: #1e1e1e;
-  --promptdoc-bg-subtle: #232323;
-  --promptdoc-border: #2e2e2e;
-  --promptdoc-text-primary: #e0e0e0;
-  --promptdoc-text-secondary: #a1a1a1;
-  --promptdoc-text-muted: #6b6b6b;
+  --promptdoc-bg-base: #0a0a0a;
+  --promptdoc-bg-surface: #0f0f0f;
+  --promptdoc-bg-subtle: #141414;
+  --promptdoc-border: #1f1f1f;
+  --promptdoc-text-primary: #ededed;
+  --promptdoc-text-secondary: #888888;
+  --promptdoc-text-muted: #444444;
 
-  /* Map Promptdoc colors to Shadcn variables for dark mode */
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --secondary: #232323;
-  --secondary-foreground: #e0e0e0;
-  --accent: #10b981;
-  --accent-foreground: #e0e0e0;
-  --muted: #232323;
-  --muted-foreground: #a1a1a1;
+  /* shadcn variable mapping — every shadcn/ui component (Dialog, Input, */
+  /* Checkbox, Tabs, etc.) reads from these, so updating them here cascades */
+  /* the new visual language to every component automatically. */
+  --primary: #ededed;
+  --primary-foreground: #0a0a0a;
+  --secondary: #141414;
+  --secondary-foreground: #ededed;
+  --accent: #3ecf8e;
+  --accent-foreground: #0a0a0a;
+  --muted: #141414;
+  --muted-foreground: #555555;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #2e2e2e;
-  --input: #2e2e2e;
-  --ring: #3b82f6;
-  --background: #121212;
-  --foreground: #e0e0e0;
-  --card: #1e1e1e;
-  --card-foreground: #e0e0e0;
-  --popover: #1e1e1e;
-  --popover-foreground: #e0e0e0;
+  --border: #1f1f1f;
+  --input: #1f1f1f;
+  --ring: #333333;
+  --background: #0a0a0a;
+  --foreground: #ededed;
+  --card: #0f0f0f;
+  --card-foreground: #ededed;
+  --popover: #0f0f0f;
+  --popover-foreground: #ededed;
 
-  /* Chart colors */
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
 
-  /* Sidebar colors */
-  --sidebar: #1e1e1e;
-  --sidebar-foreground: #e0e0e0;
-  --sidebar-primary: #3b82f6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #232323;
-  --sidebar-accent-foreground: #e0e0e0;
-  --sidebar-border: #2e2e2e;
-  --sidebar-ring: #3b82f6;
+  --sidebar: #0a0a0a;
+  --sidebar-foreground: #ededed;
+  --sidebar-primary: #ededed;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #141414;
+  --sidebar-accent-foreground: #ededed;
+  --sidebar-border: #1f1f1f;
+  --sidebar-ring: #333333;
 }
 
 @theme inline {
@@ -169,4 +168,13 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* ── Dashboard forced dark mode ──────────────────────────────────────────── */
+/* The dashboard always renders in the dark palette regardless of the user's */
+/* system theme preference — this matches the design direction (Linear/     */
+/* Cursor-style dark-first tooling UI) and avoids a jarring light-mode      */
+/* dashboard that none of the redesigned components were built for.        */
+.dashboard-root {
+  color-scheme: dark;
 }

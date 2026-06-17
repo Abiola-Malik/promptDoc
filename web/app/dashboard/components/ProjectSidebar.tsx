@@ -1,166 +1,124 @@
-// app/dashboard/components/ProjectSidebar.tsx
 "use client";
 
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Button } from "@/lib/components/ui/button";
-import { Loader2 } from "lucide-react";
-import { Project } from "@/features/projects/model/project";
-import Image from "next/image";
+import type { Project } from "@/features/projects/model/project";
 
-interface ProjectSidebarProps {
-  onUploadClick: () => void;
-  onNavigate: () => void;
-}
-
-export default function ProjectSidebar({
-  onUploadClick,
-  onNavigate,
-}: ProjectSidebarProps) {
+// ProjectSidebar is self-contained — it fetches its own project list.
+// Props removed entirely: onUploadClick and onNavigate are gone.
+// New project action lives in DashboardClient where the modals are.
+// This sidebar is navigation only.
+export default function ProjectSidebar() {
   const pathname = usePathname();
   const [projects, setProjects] = useState<Project[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const mountedRef = useRef(true);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const mounted = useRef(true);
 
   useEffect(() => {
-    mountedRef.current = true;
-
-    const fetchProjects = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetch("/api/projects");
-
-        if (!mountedRef.current) return;
-
-        if (!response.ok) throw new Error("Failed to fetch projects");
-        const data = await response.json();
-
-        if (!mountedRef.current) return;
-
-        setProjects(data);
-        setError(null);
-      } catch (error) {
-        if (!mountedRef.current) return;
-
-        setError(
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred",
-        );
-        console.error("Failed to fetch projects:", error);
-      } finally {
-        if (mountedRef.current) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchProjects();
-
+    mounted.current = true;
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((data) => {
+        if (mounted.current) setProjects(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load projects:", err);
+        if (mounted.current) setFetchError(String(err ?? "Unknown error"));
+      })
+      .finally(() => {
+        if (mounted.current) setLoading(false);
+      });
     return () => {
-      mountedRef.current = false;
+      mounted.current = false;
     };
   }, []);
 
-  const isActive = (projectId: string) =>
-    pathname.startsWith(`/dashboard/project/${projectId}`);
-
   return (
-    <div className="flex h-full flex-col bg-sidebar">
-      <div className="p-6 border-b border-sidebar-border">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          {/* Logo */}
-          <Link
-            href="/"
-            className="flex items-center gap-2 font-bold text-xl text-foreground"
-          >
-            <Image
-              src="/promptdoc-logo.svg"
-              alt="PromptDoc Logo"
-              width={80}
-              height={80}
-            />{" "}
-            PromptDoc
-          </Link>
-        </h1>
+    <div className="flex h-full flex-col">
+      {/* wordmark */}
+      <div className="px-4 h-12 flex items-center border-b border-[#1f1f1f] shrink-0">
+        <Link
+          href="/"
+          className="text-[13px] font-semibold text-[#ededed] tracking-tight"
+        >
+          PromptDoc
+        </Link>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4">
-        <p className="text-xs font-semibold uppercase tracking-wider text-sidebar-accent-foreground mb-3">
+      {/* project list */}
+      <div className="flex-1 overflow-y-auto py-3 px-2">
+        <p className="px-2 mb-2 text-[10px] uppercase tracking-widest text-[#333]">
           Projects
         </p>
-        <nav className="space-y-2">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="w-6 h-6 animate-spin text-sidebar-foreground/60" />
-            </div>
-          ) : error ? (
-            <p className="text-sm text-destructive">{error}</p>
-          ) : projects.length === 0 ? (
-            <p className="text-sm text-sidebar-foreground/60">
-              No projects yet
-            </p>
-          ) : (
-            projects.map((p) => (
-              <Link
-                key={p.$id}
-                href={`/dashboard/project/${p.$id}`}
-                onClick={onNavigate}
-                aria-current={isActive(p.$id) ? "page" : undefined}
-                className={`block px-3 py-2 rounded-lg text-sm transition-colors ${
-                  isActive(p.$id)
-                    ? "bg-sidebar-accent text-sidebar-primary font-medium"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/60"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M3 7l9-4 9 4"
-                    />
-                  </svg>
-                  {p.name}
-                  {p.status === "processing" && (
-                    <Loader2
-                      className="w-3 h-3 animate-spin ml-auto"
-                      aria-label="Processing"
-                    />
-                  )}
-                </span>
-              </Link>
-            ))
-          )}
-        </nav>
+
+        {loading ? (
+          <div className="px-2 py-4 space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-7 rounded bg-[#141414] animate-pulse" />
+            ))}
+          </div>
+        ) : fetchError ? (
+          <div className="px-2 py-4 text-sm text-red-400">
+            Failed to load projects: {fetchError}
+          </div>
+        ) : projects.length === 0 ? (
+          <p className="px-2 text-[12px] text-[#3f3f3f]">No projects</p>
+        ) : (
+          <nav className="space-y-0.5">
+            {projects.map((p) => {
+              const active = pathname.startsWith(`/dashboard/project/${p.$id}`);
+              return (
+                <Link
+                  key={p.$id}
+                  href={`/dashboard/project/${p.$id}`}
+                  className={`
+                    flex items-center gap-2 px-2 py-1.5 rounded text-[13px]
+                    transition-colors duration-100 truncate
+                    ${
+                      active
+                        ? "bg-[#1a1a1a] text-[#ededed]"
+                        : "text-[#666] hover:text-[#999] hover:bg-[#141414]"
+                    }
+                  `}
+                >
+                  {/* status dot */}
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      p.status === "ready"
+                        ? "bg-[#3ecf8e]"
+                        : p.status === "indexing"
+                          ? "bg-[#f59e0b]"
+                          : p.status === "error"
+                            ? "bg-[#ef4444]"
+                            : "bg-[#333]"
+                    }`}
+                  />
+                  <span className="truncate">{p.name}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        )}
       </div>
 
-      <div className="p-4 border-t border-sidebar-border">
-        <Button onClick={onUploadClick} className="w-full">
-          <svg
-            className="w-4 h-4 mr-2"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          New Project
-        </Button>
+      {/* bottom nav */}
+      <div className="shrink-0 border-t border-[#1f1f1f] py-2 px-2">
+        <Link
+          href="/dashboard"
+          className={`
+            flex items-center gap-2 px-2 py-1.5 rounded text-[12px]
+            transition-colors duration-100
+            ${
+              pathname === "/dashboard"
+                ? "bg-[#1a1a1a] text-[#ededed]"
+                : "text-[#444] hover:text-[#666] hover:bg-[#141414]"
+            }
+          `}
+        >
+          All projects
+        </Link>
       </div>
     </div>
   );

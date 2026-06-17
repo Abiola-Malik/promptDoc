@@ -1,125 +1,64 @@
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/lib/components/ui/card";
-import { Project } from "@/features/projects/model/project";
-import { Loader2, AlertCircle } from "lucide-react";
+import type { Project } from "@/features/projects/model/project";
 
-interface ProjectCardProps {
-  project: Project;
+function timeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "—";
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export function ProjectCard({ project }: ProjectCardProps) {
-  const isProcessing = project.status === "processing";
-  const hasError = project.status === "error";
+const STATUS = {
+  ready: { dot: "bg-[#3ecf8e]", label: "Ready" },
+  indexing: { dot: "bg-[#f59e0b]", label: "Indexing" },
+  failed: { dot: "bg-[#ef4444]", label: "Failed" },
+  default: { dot: "bg-[#3f3f3f]", label: "Unknown" },
+} as const;
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) {
-      return "Invalid date";
-    }
-    return date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+export function ProjectCard({ project }: { project: Project }) {
+  const status =
+    STATUS[project.status as keyof typeof STATUS] ?? STATUS.default;
 
   return (
-    <Link href={`/dashboard/project/${project.$id}`}>
-      <Card
-        className={`
-          relative overflow-hidden cursor-pointer transition-all duration-300
-          hover:shadow-xl hover:-translate-y-1 hover:border-primary/50
-          ${isProcessing ? "ring-2 ring-primary/20" : ""}
-          ${hasError ? "ring-2 ring-destructive/20" : ""}
-        `}
-      >
-        {/* Live Processing Overlay */}
-        {isProcessing && (
-          <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center">
-            <div className="text-center space-y-3">
-              <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
-              <div>
-                <p className="font-medium text-foreground">Processing...</p>
-                <p className="text-sm text-muted-foreground">
-                  {project.processingProgress || 0}% complete
-                </p>
-              </div>
-            </div>
-          </div>
+    <Link
+      href={`/dashboard/project/${project.$id}`}
+      className="group block rounded-md border border-[#1f1f1f] bg-[#0f0f0f] p-4
+                 hover:border-[#2f2f2f] hover:bg-[#111] transition-colors duration-150"
+    >
+      {/* name row */}
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <span className="text-sm font-medium text-[#ededed] truncate leading-snug">
+          {project.name}
+        </span>
+        {/* status dot */}
+        <span className="flex items-center gap-1.5 shrink-0 mt-0.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />
+          <span className="text-[11px] text-[#555]">{status.label}</span>
+        </span>
+      </div>
+
+      {/* meta row */}
+      <div className="flex items-center gap-3 text-[11px] text-[#444]">
+        {project.language && <span>{project.language}</span>}
+        {project.filesCount != null && <span>{project.filesCount} files</span>}
+        {project.chunksCount != null && (
+          <span>{project.chunksCount} chunks</span>
         )}
+      </div>
 
-        {/* Error State */}
-        {hasError && (
-          <div className="absolute top-3 right-3 z-20">
-            <div className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-destructive" />
-            </div>
-          </div>
-        )}
-
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <CardTitle className="text-lg truncate">{project.name}</CardTitle>
-              <CardDescription className="mt-1">
-                {project.fileCount ?? 0} files •{" "}
-                {project.framework ? `${project.framework} • ` : ""}
-                Updated {formatDate(project.$updatedAt)}
-              </CardDescription>
-            </div>
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <svg
-                className="w-6 h-6 text-primary"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7M3 7l9-4 9 4"
-                />
-              </svg>
-            </div>
-          </div>
-        </CardHeader>
-
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">
-              Created {formatDate(project.$createdAt)}
-            </span>
-
-            {/* Status Badge */}
-            <span
-              className={`
-                inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium
-                ${
-                  isProcessing
-                    ? "bg-primary/10 text-primary"
-                    : hasError
-                      ? "bg-destructive/10 text-destructive"
-                      : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                }
-              `}
-            >
-              {isProcessing && <Loader2 className="w-3 h-3 animate-spin" />}
-              {hasError && <AlertCircle className="w-3 h-3" />}
-              {!isProcessing && !hasError && (
-                <span className="w-2 h-2 rounded-full bg-green-500" />
-              )}
-              {isProcessing ? "Processing" : hasError ? "Failed" : "Ready"}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
+      {/* footer */}
+      <div className="mt-3 pt-3 border-t border-[#1a1a1a] flex items-center justify-between">
+        <span className="text-[11px] text-[#3f3f3f]">
+          {timeAgo(project.$updatedAt)}
+        </span>
+        <span className="text-[11px] text-[#2a2a2a] group-hover:text-[#555] transition-colors">
+          Open →
+        </span>
+      </div>
     </Link>
   );
 }

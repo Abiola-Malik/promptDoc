@@ -1,21 +1,14 @@
-// app/dashboard/project/[projectId]/components/chat-panel.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { ChatSidebar } from "./chat-sidebar";
-import { createChat, getProjectChats } from "@/lib/actions/chats.actions";
-import { Loader2, MessageSquare, Menu } from "lucide-react";
 import { ChatMessages } from "./chat-message";
-import { useQuery } from "@tanstack/react-query";
-import { getChatMessages } from "@/lib/actions/chats.actions";
-import { Button } from "@/lib/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/lib/components/ui/sheet";
+  createChat,
+  getProjectChats,
+  getChatMessages,
+} from "@/lib/actions/chats.actions";
+import { useQuery } from "@tanstack/react-query";
 
 interface Message {
   id: string;
@@ -24,20 +17,13 @@ interface Message {
   timestamp: Date;
   sources?: Array<{
     score?: number;
-    metadata?: {
-      filename?: string;
-      startLine?: number;
-    };
+    metadata?: { filename?: string; startLine?: number };
   }>;
 }
 
-interface ChatPanelProps {
-  projectId: string;
-}
-
-export function ChatPanel({ projectId }: ChatPanelProps) {
+export function ChatPanel({ projectId }: { projectId: string }) {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [createChatError, setCreateChatError] = useState<string | null>(null);
 
   const { data: chats = [], isLoading: isLoadingChats } = useQuery({
     queryKey: ["project-chats", projectId],
@@ -45,23 +31,38 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
   });
 
   useEffect(() => {
-    const initialize = async () => {
-      if (isLoadingChats) return;
-
-      if (chats.length > 0 && !activeChatId) {
-        setActiveChatId(chats[0].$id);
-      } else if (chats.length === 0 && !activeChatId) {
-        try {
-          const newChat = await createChat(projectId, "General Chat");
-          setActiveChatId(newChat.$id);
-        } catch (error) {
-          console.error("Failed to create chat:", error);
-        }
-      }
-    };
-
-    initialize();
+    // clear any previous create-chat error when chats reload
+    setCreateChatError(null);
+    if (isLoadingChats) return;
+    if (chats.length > 0 && !activeChatId) {
+      setActiveChatId(chats[0].$id);
+    } else if (chats.length === 0 && !activeChatId) {
+      setCreateChatError(null);
+      createChat(projectId, "General Chat")
+        .then((c) => {
+          setActiveChatId(c.$id);
+          setCreateChatError(null);
+        })
+        .catch((e) => {
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("Failed to create chat:", e);
+          setCreateChatError(msg || "Failed to create chat");
+        });
+    }
   }, [chats, isLoadingChats, activeChatId, projectId]);
+
+  async function tryCreateDefaultChat() {
+    setCreateChatError(null);
+    try {
+      const c = await createChat(projectId, "General Chat");
+      setActiveChatId(c.$id);
+      setCreateChatError(null);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("Retry create chat failed:", e);
+      setCreateChatError(msg || "Failed to create chat");
+    }
+  }
 
   const { data: messages = [], isLoading: isLoadingHistory } = useQuery({
     queryKey: ["chat-messages", activeChatId],
@@ -74,50 +75,36 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
         content: msg.content,
         timestamp: new Date(msg.createdAt),
         sources: msg.sources
-          ? (() => {
-              try {
-                return JSON.parse(msg.sources);
-              } catch {
-                console.error("Failed to parse message sources:", msg.$id);
-                return undefined;
-              }
-            })()
+          ? safeParseSources(msg.sources, msg.$id)
           : undefined,
       })) as Message[];
     },
     enabled: !!activeChatId,
   });
 
-  const handleSelectChat = (chatId: string) => {
-    setActiveChatId(chatId);
-    setIsSidebarOpen(false);
-  };
+  function safeParseSources(raw: string, id: string) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      console.error("Failed to parse sources:", id);
+      return undefined;
+    }
+  }
 
-  const activeChat = chats.find((chat) => chat.$id === activeChatId);
+  const activeChat = chats.find((c) => c.$id === activeChatId);
 
   if (isLoadingChats) {
     return (
-      <div className="flex h-full items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <div className="relative">
-            <Loader2 className="w-10 h-10 md:w-12 md:h-12 animate-spin mx-auto text-primary" />
-            <div className="absolute inset-0 blur-xl bg-primary/20 animate-pulse" />
-          </div>
-          <div className="space-y-2">
-            <p className="text-sm md:text-base font-medium">Loading chats...</p>
-            <p className="text-xs md:text-sm text-muted-foreground">
-              Setting up your workspace
-            </p>
-          </div>
-        </div>
+      <div className="flex h-full items-center justify-center">
+        <div className="w-4 h-4 rounded-full border-2 border-[#222] border-t-[#555] animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full bg-background">
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:block w-72 xl:w-80 flex-shrink-0 border-r border-border">
+    <div className="flex h-full">
+      {/* sidebar — hidden below lg, no sheet/drawer for now (revisit mobile separately) */}
+      <div className="hidden lg:flex w-60 shrink-0 border-r border-[#1a1a1a]">
         <ChatSidebar
           projectId={projectId}
           activeChatId={activeChatId}
@@ -125,66 +112,37 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
         />
       </div>
 
-      {/* Main Chat Area */}
+      {/* main */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile Header */}
-        <div className="lg:hidden sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-          <Sheet open={isSidebarOpen} onOpenChange={setIsSidebarOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0"
-                aria-label="Open chat list"
-              >
-                <Menu className="w-5 h-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[85vw] sm:w-96 p-0">
-              <SheetHeader className="px-4 py-3 border-b border-border">
-                <SheetTitle className="text-left">Chats</SheetTitle>
-              </SheetHeader>
-              <div className="h-[calc(100%-60px)] overflow-y-auto">
-                <ChatSidebar
-                  projectId={projectId}
-                  activeChatId={activeChatId}
-                  onSelectChat={handleSelectChat}
-                />
-              </div>
-            </SheetContent>
-          </Sheet>
+        {/* chat title bar */}
+        <div className="h-10 flex items-center px-4 border-b border-[#1a1a1a] shrink-0">
+          <span className="text-[12px] text-[#888] truncate">
+            {activeChat?.title || "Chat"}
+          </span>
+          {messages.length > 0 && (
+            <span className="text-[11px] text-[#3f3f3f] ml-2">
+              {messages.length}
+            </span>
+          )}
+        </div>
 
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-primary shrink-0" />
-              <h2 className="text-sm font-semibold truncate">
-                {activeChat?.title || "Chat"}
-              </h2>
+        {createChatError && (
+          <div className="px-4 py-2 bg-[#2a0f0f] text-[12px] text-[#ffdede] flex items-center justify-between gap-4">
+            <div>
+              Failed to create default chat: {createChatError}. You can retry or
+              create a chat from the sidebar.
             </div>
-            {messages.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {messages.length} message{messages.length !== 1 ? "s" : ""}
-              </p>
-            )}
+            <div>
+              <button
+                onClick={tryCreateDefaultChat}
+                className="px-2 py-1 rounded bg-[#3ecf8e] text-[#011006] text-[12px]"
+              >
+                Retry
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Desktop Header (Optional) */}
-        <div className="hidden lg:flex items-center gap-3 px-6 py-4 border-b border-border bg-muted/30">
-          <MessageSquare className="w-5 h-5 text-primary" />
-          <div className="flex-1 min-w-0">
-            <h2 className="text-lg font-semibold truncate">
-              {activeChat?.title || "Chat"}
-            </h2>
-            {messages.length > 0 && (
-              <p className="text-sm text-muted-foreground">
-                {messages.length} message{messages.length !== 1 ? "s" : ""}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Chat Messages Area */}
         <div className="flex-1 min-h-0">
           {activeChatId ? (
             <ChatMessages
@@ -194,29 +152,8 @@ export function ChatPanel({ projectId }: ChatPanelProps) {
               isLoadingHistory={isLoadingHistory}
             />
           ) : (
-            <div className="flex items-center justify-center h-full p-6">
-              <div className="text-center space-y-4 max-w-md">
-                <div className="w-16 h-16 md:w-20 md:h-20 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto">
-                  <MessageSquare className="w-8 h-8 md:w-10 md:h-10 text-muted-foreground" />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-base md:text-lg font-medium">
-                    No chat selected
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Select a chat from the sidebar or create a new one to get
-                    started
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="lg:hidden"
-                >
-                  <Menu className="w-4 h-4 mr-2" />
-                  Open Chat List
-                </Button>
-              </div>
+            <div className="flex items-center justify-center h-full">
+              <p className="text-[12px] text-[#444]">No chat selected</p>
             </div>
           )}
         </div>

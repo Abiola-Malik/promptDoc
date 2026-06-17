@@ -11,7 +11,7 @@ export interface Project {
   $createdAt: string;
   $updatedAt: string;
   name: string;
-  status: "processing" | "ready" | "error";
+  status: "indexing" | "ready" | "error";
   processingProgress?: number;
   fileCount: number;
   chunksCount?: number;

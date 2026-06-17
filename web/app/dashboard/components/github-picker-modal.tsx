@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -6,11 +7,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/lib/components/ui/dialog";
-import { Button } from "@/lib/components/ui/button";
 import { Input } from "@/lib/components/ui/input";
-import { ScrollArea } from "@/lib/components/ui/scroll-area";
-import { Badge } from "@/lib/components/ui/badge";
-import { GithubRepo } from "@/features/github/models/github";
+import type { GithubRepo } from "@/features/github/models/github";
 
 type Step = "repos" | "confirm";
 
@@ -33,25 +31,25 @@ export default function GithubPickerModal({
   const [fileCount, setFileCount] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [treeLoading, setTreeLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // fetch repos on open
   useEffect(() => {
     if (!open) return;
     setLoading(true);
+    setFetchError(null);
     fetch("/api/github/repos")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load repositories.");
+        return r.json();
+      })
       .then((data) => {
         setRepos(data.repos ?? []);
         setFiltered(data.repos ?? []);
       })
-      .catch((err) => {
-        console.error("Error fetching repos:", err);
-        // TODO: show error state in UI
-      })
+      .catch(() => setFetchError("Failed to load repositories."))
       .finally(() => setLoading(false));
   }, [open]);
 
-  // filter on search
   useEffect(() => {
     setFiltered(
       repos.filter((r) => r.name.toLowerCase().includes(search.toLowerCase())),
@@ -68,6 +66,8 @@ export default function GithubPickerModal({
       const data = await res.json();
       setFileCount(data.tree?.length ?? 0);
       setStep("confirm");
+    } catch {
+      setFetchError("Failed to fetch file tree.");
     } finally {
       setTreeLoading(false);
     }
@@ -77,91 +77,139 @@ export default function GithubPickerModal({
     if (!selected || fileCount === null) return;
     onRepoSelected(selected, fileCount);
     onOpenChange(false);
-    // reset
     setStep("repos");
     setSelected(null);
     setSearch("");
   }
 
+  function handleClose(o: boolean) {
+    if (!o) {
+      setStep("repos");
+      setSearch("");
+      setSelected(null);
+      setFetchError(null);
+    }
+    onOpenChange(o);
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {step === "repos"
-              ? "Select a GitHub repository"
-              : "Confirm repository"}
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-md bg-[#0f0f0f] border-[#1f1f1f] p-0 gap-0">
+        <DialogHeader className="px-5 pt-5 pb-4 border-b border-[#1a1a1a]">
+          <DialogTitle className="text-sm font-medium text-[#ededed]">
+            {step === "repos" ? "Select a repository" : "Confirm import"}
           </DialogTitle>
         </DialogHeader>
 
         {step === "repos" && (
-          <div className="space-y-3">
+          <div className="p-4 space-y-3">
+            {/* search */}
             <Input
-              placeholder="Search repos..."
+              placeholder="Search repositories..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-xs bg-[#141414] border-[#1f1f1f] text-[#ededed]
+                         placeholder:text-[#3f3f3f] focus-visible:ring-0
+                         focus-visible:border-[#333]"
+              autoFocus
             />
-            {loading ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Loading repos...
-              </p>
-            ) : (
-              <ScrollArea className="h-72">
-                {filtered.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No repositories found.
-                  </p>
-                )}
-                <div className="space-y-1">
-                  {filtered.map((repo) => (
-                    <button
-                      key={repo.id}
-                      onClick={() => handleSelectRepo(repo)}
-                      disabled={treeLoading}
-                      className="w-full text-left px-3 py-2 rounded-md hover:bg-accent transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium">{repo.name}</span>
-                        <div className="flex gap-2">
-                          {repo.private && (
-                            <Badge variant="outline">private</Badge>
-                          )}
-                          {repo.language && (
-                            <Badge variant="secondary">{repo.language}</Badge>
-                          )}
-                        </div>
-                      </div>
-                      {repo.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                          {repo.description}
-                        </p>
-                      )}
-                    </button>
+
+            {/* error */}
+            {fetchError && (
+              <p className="text-xs text-red-400 px-1">{fetchError}</p>
+            )}
+
+            {/* list */}
+            <div className="max-h-72 overflow-y-auto space-y-0.5 -mx-1 px-1">
+              {loading ? (
+                <div className="space-y-1.5 py-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="h-10 rounded bg-[#141414] animate-pulse"
+                    />
                   ))}
                 </div>
-              </ScrollArea>
-            )}
+              ) : filtered.length === 0 ? (
+                <p className="text-xs text-[#444] text-center py-8">
+                  No repositories found
+                </p>
+              ) : (
+                filtered.map((repo) => (
+                  <button
+                    key={repo.id}
+                    onClick={() => handleSelectRepo(repo)}
+                    disabled={treeLoading}
+                    className="w-full text-left px-3 py-2.5 rounded-md
+                               hover:bg-[#141414] transition-colors duration-100
+                               disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[13px] text-[#ccc] truncate">
+                        {repo.name}
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {repo.private && (
+                          <span
+                            className="text-[10px] text-[#555] border border-[#2a2a2a]
+                                           rounded px-1.5 py-0.5"
+                          >
+                            private
+                          </span>
+                        )}
+                        {repo.language && (
+                          <span className="text-[10px] text-[#444]">
+                            {repo.language}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {repo.description && (
+                      <p className="text-[11px] text-[#3f3f3f] mt-0.5 truncate">
+                        {repo.description}
+                      </p>
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         )}
 
         {step === "confirm" && selected && (
-          <div className="space-y-4">
-            <div className="rounded-md border p-4 space-y-2">
-              <p className="font-medium">{selected.full_name}</p>
-              <p className="text-sm text-muted-foreground">
+          <div className="p-4 space-y-4">
+            {/* repo summary */}
+            <div className="rounded-md border border-[#1f1f1f] bg-[#0a0a0a] px-4 py-3 space-y-1">
+              <p className="text-[13px] text-[#ededed] font-medium">
+                {selected.full_name}
+              </p>
+              <p className="text-[11px] text-[#555]">
                 {fileCount} code files detected
               </p>
-              {fileCount && fileCount > 300 && (
-                <p className="text-xs text-amber-600">
+              {fileCount !== null && fileCount > 300 && (
+                <p className="text-[11px] text-[#f59e0b]">
                   Large repo — indexing may take a few minutes.
                 </p>
               )}
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setStep("repos")}>
-                Back
-              </Button>
-              <Button onClick={handleConfirm}>Index this repo</Button>
+
+            {/* actions */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => setStep("repos")}
+                className="text-[12px] text-[#555] hover:text-[#999]
+                           transition-colors"
+              >
+                ← Back
+              </button>
+              <button
+                onClick={handleConfirm}
+                className="h-8 px-4 rounded-md bg-[#ededed] text-[#0a0a0a]
+                           text-[12px] font-medium hover:bg-white
+                           transition-colors duration-100"
+              >
+                Index repository
+              </button>
             </div>
           </div>
         )}

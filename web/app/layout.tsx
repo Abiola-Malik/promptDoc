@@ -6,7 +6,6 @@ import { ThemeProvider } from "next-themes";
 import { Analytics } from "@vercel/analytics/next";
 import { QueryProvider } from "./providers/query-provider";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import Navbar from "./(home)/components/homepage/navbar";
 import AOSInit from "@/lib/components/AOSinit";
 
 const geistSans = Geist({
@@ -14,7 +13,6 @@ const geistSans = Geist({
   subsets: ["latin"],
   display: "swap",
 });
-
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
@@ -44,9 +42,7 @@ export const metadata: Metadata = {
   creator: "Abiola Malik",
   publisher: "Promptdoc",
   metadataBase: new URL("https://promptdoc-ai.vercel.app"),
-  alternates: {
-    canonical: "/",
-  },
+  alternates: { canonical: "/" },
   openGraph: {
     title: "Promptdoc - AI Documentation That Writes Itself",
     description:
@@ -88,13 +84,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Only preload truly critical above-the-fold images */}
         <link
           rel="preload"
           href="/hero-image.webp"
@@ -102,17 +95,13 @@ export default function RootLayout({
           type="image/webp"
           crossOrigin=""
         />
-        {/* No OG preload, no manual icons — Next.js handles them via file convention */}
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-promptdoc-bg-base text-promptdoc-text-primary`}
       >
         <AOSInit />
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <QueryProvider>
-            <Navbar />
-            {children}
-          </QueryProvider>
+          <QueryProvider>{children}</QueryProvider>
           <Analytics />
           <SpeedInsights />
         </ThemeProvider>

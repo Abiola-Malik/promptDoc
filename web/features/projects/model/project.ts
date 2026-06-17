@@ -5,7 +5,7 @@ export interface Project extends Models.Document {
   $createdAt: string;
   $updatedAt: string;
   name: string;
-  status: "processing" | "ready" | "error";
+  status: "indexing" | "ready" | "error";
   processingProgress?: number;
   fileCount: number;
   chunksCount?: number;

@@ -1,10 +1,10 @@
-import Hero from "@/app/(home)/components/homepage/hero";
-import Features from "@/app/(home)/components/homepage/features";
-import HowItWorks from "@/app/(home)/components/homepage/how-it-works";
-import Showcase from "@/app/(home)/components/homepage/showcase";
-import BlogPreview from "@/app/(home)/components/homepage/blog-preview";
-import CTABanner from "@/app/(home)/components/homepage/cta-banner";
-import Footer from "@/app/(home)/components/homepage/footer";
+import Hero from "@/app/(home)/homepage/hero";
+import Features from "@/app/(home)/homepage/features";
+import HowItWorks from "@/app/(home)/homepage/how-it-works";
+import Showcase from "@/app/(home)/homepage/showcase";
+import BlogPreview from "@/app/(home)/homepage/blog-preview";
+import CTABanner from "@/app/(home)/homepage/cta-banner";
+import Footer from "@/app/(home)/homepage/footer";
 
 export const metadata = {
   title: "PromptDoc - AI-Powered Documentation for Developers",
