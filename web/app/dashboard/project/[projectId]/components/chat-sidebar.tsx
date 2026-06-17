@@ -13,7 +13,7 @@ import {
 interface ChatSidebarProps {
   projectId: string;
   activeChatId: string | null;
-  onSelectChat: (chatId: string) => void;
+  onSelectChat: (chatId: string | null) => void;
 }
 
 export function ChatSidebar({
@@ -64,7 +64,7 @@ export function ChatSidebar({
       if (activeChatId === chatId && remaining.length > 0) {
         onSelectChat(remaining[0].$id);
       } else if (activeChatId === chatId && remaining.length === 0) {
-        onSelectChat(null as any); // Clear stale ID; ChatPanel will auto-create
+        onSelectChat(null); // Clear stale ID; ChatPanel will auto-create
       }
     } catch (error) {
       console.error("Failed to delete chat:", error);
