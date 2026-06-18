@@ -157,6 +157,12 @@ export async function POST(
                       `data: ${JSON.stringify({ type: "error", error: event.message })}\n\n`,
                     ),
                   );
+                } else if (event.type === "thinking") {
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ type: "thinking", message: event.message })}\n\n`,
+                    ),
+                  );
                 }
                 // node events are internal — skip them
               } catch {

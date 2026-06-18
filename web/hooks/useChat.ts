@@ -1,11 +1,9 @@
 // hooks/useChat.ts
 "use client";
-
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { saveMessage } from "@/lib/actions/chats.actions";
 import { createGeneratedFile } from "@/lib/actions/file.actions";
 import { useState, useCallback, useRef } from "react";
-import { useFileStore } from "@/stores/FileStore";
 
 interface Message {
   id: string;
@@ -30,6 +28,7 @@ interface UseChatOptions {
 export function useChat({ projectId, chatId, onError }: UseChatOptions) {
   const queryClient = useQueryClient();
   const [streamingMessage, setStreamingMessage] = useState("");
+  const [thinkingMessage, setThinkingMessage] = useState(""); // New: for progress/thinking steps
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const currentAssistantIdRef = useRef<string | null>(null);
@@ -43,7 +42,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
         content: message.content,
         projectId,
         sources: message.sources?.map(
-          (source) => source.metadata?.filename || JSON.stringify(source)
+          (source) => source.metadata?.filename || JSON.stringify(source),
         ),
       });
       return message;
@@ -51,26 +50,23 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
     onMutate: async (newMessage) => {
       // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ["chat-messages", chatId] });
-
       // Snapshot previous value
       const previousMessages = queryClient.getQueryData<Message[]>([
         "chat-messages",
         chatId,
       ]);
-
       // Optimistically update
       queryClient.setQueryData<Message[]>(["chat-messages", chatId], (old) => [
         ...(old || []),
         newMessage,
       ]);
-
       return { previousMessages };
     },
     onError: (err, newMessage, context) => {
       // Rollback on error
       queryClient.setQueryData(
         ["chat-messages", chatId],
-        context?.previousMessages
+        context?.previousMessages,
       );
       onError?.(err instanceof Error ? err.message : "Failed to save message");
     },
@@ -83,7 +79,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
   const sendMessage = useCallback(
     async (
       content: string,
-      options?: { intent?: "generate documentation" }
+      options?: { intent?: "generate documentation" },
     ) => {
       if (!content.trim() || isLoading || !chatId) return;
 
@@ -102,22 +98,19 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
         setIsLoading(true);
         const generatingMessageId = `assistant-${Date.now()}`;
         currentAssistantIdRef.current = generatingMessageId;
-
         const generatingMessage: Message = {
           id: generatingMessageId,
           role: "assistant",
           content: "Generating documentation...",
           timestamp: new Date(),
         };
-
         // Optimistically add generating message
         queryClient.setQueryData<Message[]>(
           ["chat-messages", chatId],
-          (old) => [...(old || []), generatingMessage]
+          (old) => [...(old || []), generatingMessage],
         );
 
         abortControllerRef.current = new AbortController();
-
         try {
           const response = await fetch(`/api/projects/${projectId}/chat`, {
             method: "POST",
@@ -132,15 +125,13 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
           if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(
-              errorData.error || "Failed to generate documentation"
+              errorData.error || "Failed to generate documentation",
             );
           }
 
           const data = await response.json();
-
           if (data && data.file) {
             const { filename, content: fileContent, title } = data.file;
-
             const result = await createGeneratedFile({
               projectId,
               filename,
@@ -162,8 +153,8 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
               ["chat-messages", chatId],
               (old) =>
                 (old || []).map((msg) =>
-                  msg.id === generatingMessageId ? successMessage : msg
-                )
+                  msg.id === generatingMessageId ? successMessage : msg,
+                ),
             );
 
             // Save success message to DB
@@ -178,7 +169,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
                     content: fileContent,
                     open: true,
                   },
-                })
+                }),
               );
             }
           } else {
@@ -188,27 +179,23 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
           if (error instanceof Error && error.name === "AbortError") {
             return;
           }
-
           const errorMsg =
             error instanceof Error
               ? error.message
               : "Failed to generate documentation";
-
           const errorMessage: Message = {
             id: generatingMessageId,
             role: "assistant",
             content: `**Error generating documentation:**\n\n${errorMsg}`,
             timestamp: new Date(),
           };
-
           queryClient.setQueryData<Message[]>(
             ["chat-messages", chatId],
             (old) =>
               (old || []).map((m) =>
-                m.id === generatingMessageId ? errorMessage : m
-              )
+                m.id === generatingMessageId ? errorMessage : m,
+              ),
           );
-
           addMessageMutation.mutate(errorMessage);
           onError?.(errorMsg);
         } finally {
@@ -222,6 +209,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
       ///// NORMAL CHAT STREAMING /////
       setIsLoading(true);
       setStreamingMessage("");
+      setThinkingMessage(""); // Reset thinking state
 
       const assistantId = `assistant-${Date.now()}`;
       currentAssistantIdRef.current = assistantId;
@@ -259,9 +247,17 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
               try {
                 const data = JSON.parse(line.slice(6));
 
-                if (data.type === "chunk") {
+                // Handle thinking / progress messages (like Grok)
+                if (data.type === "thinking") {
+                  setThinkingMessage(data.message);
+                  continue;
+                }
+
+                if (data.type === "token") {
                   accumulatedContent += data.content;
                   setStreamingMessage(accumulatedContent);
+                  // Clear thinking once real answer tokens arrive
+                  if (thinkingMessage) setThinkingMessage("");
                 }
 
                 if (data.type === "sources") {
@@ -276,16 +272,15 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
                     timestamp: new Date(),
                     sources,
                   };
-
                   // Add to cache via mutation
                   addMessageMutation.mutate(finalMessage);
-
                   setStreamingMessage("");
+                  setThinkingMessage("");
                   setIsLoading(false);
                 }
 
                 if (data.type === "error") {
-                  throw new Error(data.error);
+                  throw new Error(data.message || "An error occurred");
                 }
               } catch (parseError) {
                 if (parseError instanceof SyntaxError) continue;
@@ -309,11 +304,10 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
         } else {
           const errorMessage =
             error instanceof Error ? error.message : "Failed to send message";
-
           const errorMsg: Message = {
             id: assistantId,
             role: "assistant",
-            content: ` **Error:** ${errorMessage}`,
+            content: `**Error:** ${errorMessage}`,
             timestamp: new Date(),
           };
           addMessageMutation.mutate(errorMsg);
@@ -322,6 +316,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
         }
       } finally {
         setIsLoading(false);
+        setThinkingMessage("");
         abortControllerRef.current = null;
         currentAssistantIdRef.current = null;
       }
@@ -330,11 +325,11 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
       projectId,
       chatId,
       isLoading,
-      streamingMessage,
+      thinkingMessage,
       onError,
       queryClient,
       addMessageMutation,
-    ]
+    ],
   );
 
   const stop = useCallback(() => {
@@ -342,6 +337,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
       abortControllerRef.current.abort();
     }
   }, []);
+
   const messages = queryClient.getQueryData<Message[]>([
     "chat-messages",
     chatId,
@@ -350,6 +346,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
   return {
     messages,
     streamingMessage,
+    thinkingMessage, // ← New: expose for UI
     isLoading,
     sendMessage,
     stop,

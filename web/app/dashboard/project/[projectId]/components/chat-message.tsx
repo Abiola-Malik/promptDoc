@@ -149,10 +149,11 @@ export function ChatMessages({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [mode, setMode] = useState<"chat" | "generate-docs">("chat");
 
-  const { streamingMessage, isLoading, sendMessage, stop } = useChat({
-    projectId,
-    chatId,
-  });
+  const { streamingMessage, isLoading, sendMessage, thinkingMessage, stop } =
+    useChat({
+      projectId,
+      chatId,
+    });
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -322,6 +323,19 @@ export function ChatMessages({
                 />
               ))}
 
+              {/* Thinking / Progress Message */}
+              {thinkingMessage && (
+                <div className="flex justify-start">
+                  <div className="max-w-[70%] rounded-md px-3.5 py-2.5">
+                    <div className="flex items-center gap-3 text-sm text-[#888] italic">
+                      <div className="w-2 h-2 bg-[#888] rounded-full animate-pulse" />
+                      {thinkingMessage}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Streaming Answer */}
               {isLoading && streamingMessage && (
                 <div className="flex justify-start">
                   <div className="max-w-[70%] rounded-md px-3.5 py-2.5">
