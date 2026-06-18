@@ -139,10 +139,10 @@ export async function POST(
                 const event = JSON.parse(line.slice(6));
 
                 if (event.type === "token") {
-                  // translate token → chunk for useChat.ts compatibility
+                  // translate token → chunk for useChat.ts compatibility and streaming
                   controller.enqueue(
                     encoder.encode(
-                      `data: ${JSON.stringify({ type: "chunk", content: event.content })}\n\n`,
+                      `data: ${JSON.stringify({ type: "token", content: event.content })}\n\n`,
                     ),
                   );
                 } else if (event.type === "done") {

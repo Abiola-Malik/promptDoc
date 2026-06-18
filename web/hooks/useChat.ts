@@ -3,7 +3,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { saveMessage } from "@/lib/actions/chats.actions";
 import { createGeneratedFile } from "@/lib/actions/file.actions";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 interface Message {
   id: string;
@@ -21,7 +21,7 @@ interface Message {
 
 interface UseChatOptions {
   projectId: string;
-  chatId: string;
+  chatId: string | null;
   onError?: (error: string) => void;
 }
 
@@ -36,6 +36,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
   // Mutation for adding messages (optimistic updates)
   const addMessageMutation = useMutation({
     mutationFn: async (message: Message) => {
+      if (!chatId) throw new Error("Missing chatId");
       await saveMessage({
         chatId,
         role: message.role,
@@ -215,6 +216,10 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
       currentAssistantIdRef.current = assistantId;
       abortControllerRef.current = new AbortController();
 
+      let accumulatedContent = "";
+      let sources: Message["sources"] | undefined = undefined;
+      let buffer = "";
+
       try {
         const response = await fetch(`/api/projects/${projectId}/chat`, {
           method: "POST",
@@ -232,70 +237,86 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
         if (!reader) throw new Error("No response body");
 
         const decoder = new TextDecoder();
-        let accumulatedContent = "";
-        let sources: Message["sources"] = undefined;
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n");
+          // keep last partial line in buffer
+          buffer = parts.pop() || "";
 
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
+          for (const line of parts) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const data = JSON.parse(line.slice(6));
 
-                // Handle thinking / progress messages (like Grok)
-                if (data.type === "thinking") {
-                  setThinkingMessage(data.message);
-                  continue;
-                }
-
-                if (data.type === "token") {
-                  accumulatedContent += data.content;
-                  setStreamingMessage(accumulatedContent);
-                  // Clear thinking once real answer tokens arrive
-                  if (thinkingMessage) setThinkingMessage("");
-                }
-
-                if (data.type === "sources") {
-                  sources = data.sources;
-                }
-
-                if (data.type === "done") {
-                  const finalMessage: Message = {
-                    id: assistantId,
-                    role: "assistant",
-                    content: accumulatedContent,
-                    timestamp: new Date(),
-                    sources,
-                  };
-                  // Add to cache via mutation
-                  addMessageMutation.mutate(finalMessage);
-                  setStreamingMessage("");
-                  setThinkingMessage("");
-                  setIsLoading(false);
-                }
-
-                if (data.type === "error") {
-                  throw new Error(data.message || "An error occurred");
-                }
-              } catch (parseError) {
-                if (parseError instanceof SyntaxError) continue;
-                throw parseError;
+              // Handle thinking / progress messages (like Grok)
+              if (data.type === "thinking") {
+                setThinkingMessage(data.message);
+                continue;
               }
+
+              if (data.type === "token") {
+                accumulatedContent += String(data.content ?? "");
+                setStreamingMessage(accumulatedContent);
+                // Clear thinking when real content starts arriving
+                setThinkingMessage("");
+              }
+
+              if (data.type === "sources") {
+                const maybe = data.sources;
+                if (Array.isArray(maybe)) {
+                  sources = maybe.map((s: any) => ({
+                    score: typeof s?.score === "number" ? s.score : undefined,
+                    metadata:
+                      s && typeof s === "object" && s.metadata
+                        ? {
+                            filename:
+                              typeof s.metadata.filename === "string"
+                                ? s.metadata.filename
+                                : undefined,
+                            startLine:
+                              typeof s.metadata.startLine === "number"
+                                ? s.metadata.startLine
+                                : undefined,
+                          }
+                        : undefined,
+                  }));
+                }
+              }
+
+              if (data.type === "done") {
+                const finalMessage: Message = {
+                  id: assistantId,
+                  role: "assistant",
+                  content: accumulatedContent,
+                  timestamp: new Date(),
+                  sources,
+                };
+                addMessageMutation.mutate(finalMessage);
+                setStreamingMessage("");
+                setThinkingMessage("");
+                setIsLoading(false);
+              }
+
+              if (data.type === "error") {
+                throw new Error(data.message || "An error occurred");
+              }
+            } catch (parseError) {
+              if (parseError instanceof SyntaxError) continue;
+              throw parseError;
             }
           }
         }
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
-          if (streamingMessage) {
+          if (accumulatedContent) {
             const partialMessage: Message = {
               id: assistantId,
               role: "assistant",
-              content: streamingMessage + "\n\n_[Generation stopped]_",
+              content: accumulatedContent + "\n\n_[Generation stopped]_",
               timestamp: new Date(),
             };
             addMessageMutation.mutate(partialMessage);
@@ -338,10 +359,10 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
     }
   }, []);
 
-  const messages = queryClient.getQueryData<Message[]>([
+  const messages = (queryClient.getQueryData<Message[]>([
     "chat-messages",
     chatId,
-  ]) as Message[];
+  ]) ?? []) as Message[];
 
   return {
     messages,
