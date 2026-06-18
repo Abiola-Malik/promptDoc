@@ -35,6 +35,9 @@ async def generate_draft(state: GraphState) -> dict:
                 f"Write the documentation."
             ))
         ]
-
-    response = await llm.ainvoke(messages)
-    return {"draft": response.content}
+    draft = ""
+    answer= ""
+    async for chunk in llm.astream(messages):
+        if chunk.content:  
+            draft += chunk.content
+    return {"draft": draft}

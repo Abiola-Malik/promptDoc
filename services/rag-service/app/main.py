@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from app.graph import get_graph
@@ -17,8 +17,20 @@ class QueryRequest(BaseModel):
 
 import secrets
 
+
 def verify_secret(x_internal_secret: str = Header(...)):
-    if not secrets.compare_digest(x_internal_secret, settings.internal_api_secret):
+    # ensure server secret is configured
+    server_secret = getattr(settings, "internal_api_secret", None)
+    if not server_secret or not isinstance(server_secret, str):
+        logger.error("internal_api_secret is not configured on server")
+        raise HTTPException(status_code=500, detail="Server misconfigured")
+
+    # perform constant-time comparison
+    try:
+        if not secrets.compare_digest(x_internal_secret, server_secret):
+            raise HTTPException(status_code=403, detail="Forbidden")
+    except TypeError:
+        # compare_digest can raise TypeError for non-bytes/str; fail safe
         raise HTTPException(status_code=403, detail="Forbidden")
 
 @app.get("/health")
@@ -26,8 +38,7 @@ async def health():
     return {"status": "ok", "service": "rag-service"}
 
 @app.post("/query")
-async def query(request: QueryRequest, x_internal_secret: str = Header(...)):
-    verify_secret(x_internal_secret)
+async def query(request: QueryRequest, _=Depends(verify_secret)):
 
     async def event_stream():
         graph = get_graph()
@@ -49,7 +60,10 @@ async def query(request: QueryRequest, x_internal_secret: str = Header(...)):
 
         try:
             async for event in graph.astream_events(initial_state, version="v2"):
-                kind = event["event"]
+                kind = event.get("event")
+                if not kind:
+                    # unexpected event shape, skip
+                    continue
 
                 # stream LLM tokens as they arrive
                 if kind == "on_chat_model_stream":
@@ -57,19 +71,29 @@ async def query(request: QueryRequest, x_internal_secret: str = Header(...)):
                     chunk = data.get("chunk") if isinstance(data, dict) else None
                     # support either dict-shaped chunk or object with .content
                     content = None
-                    if isinstance(chunk, dict):
-                        content = chunk.get("content")
-                    else:
-                        content = getattr(chunk, "content", None)
+                    if chunk is not None:
+                        if hasattr(chunk, "content"):
+                            content = getattr(chunk, "content", None)
+                        elif isinstance(chunk, dict):
+                            content = chunk.get("content") or chunk.get("text")
 
-                    if content:
-                        yield f"data: {json.dumps({'type': 'token', 'content': content})}\n\n"
+                    if content is not None:
+                        # coerce to string to avoid json serialization errors
+                        try:
+                            content_str = str(content)
+                            payload = {"type": "token", "content": content_str}
+                            yield f"data: {json.dumps(payload)}\n\n"
+                        except Exception:
+                            logger.exception("failed to serialize token content")
 
                 # notify client which node is running
                 elif kind == "on_chain_start":
-                    node = event.get("name", "")
+                    node = event.get("name") or ""
                     if node in ("classify", "expand", "retrieve", "generate", "plan", "draft", "critique"):
-                        yield f"data: {json.dumps({'type': 'node', 'node': node})}\n\n"
+                        try:
+                            yield f"data: {json.dumps({"type": "node", "node": node})}\n\n"
+                        except Exception:
+                            logger.exception("failed to serialize node event")
 
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 

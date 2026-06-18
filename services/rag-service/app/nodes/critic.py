@@ -23,8 +23,11 @@ async def critique_draft(state: GraphState) -> dict:
             f"Code context it should cover:\n{state['context']}"
         ))
     ]
-    response = await llm.ainvoke(messages)
-    critique = response.content.strip()
+    answer= ""
+    async for chunk in llm.astream(messages):
+        if chunk.content:  
+            answer += chunk.content
+    critique = answer.strip()
     loops = state.get("critique_loops", 0) + 1
     return {"critique": critique, "critique_loops": loops}
 

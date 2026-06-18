@@ -14,5 +14,9 @@ async def plan_documentation(state: GraphState) -> dict:
         SystemMessage(content=PLANNER_PROMPT),
         HumanMessage(content=f"Codebase context:\n{state['context']}\n\nCreate a documentation outline.")
     ]
-    response = await llm.ainvoke(messages)
-    return {"outline": response.content, "critique_loops": 0}
+    outline = ""
+    outline= ""
+    async for chunk in llm.astream(messages):
+        if chunk.content:  
+            outline += chunk.content
+    return {"outline": outline, "critique_loops": 0}

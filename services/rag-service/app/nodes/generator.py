@@ -14,5 +14,8 @@ async def generate_answer(state: GraphState) -> dict:
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content=f"Context:\n{state['context']}\n\nQuestion: {state['query']}")
     ]
-    response = await llm.ainvoke(messages)
-    return {"answer": response.content}
+    answer= ""
+    async for chunk in llm.astream(messages):
+        if chunk.content:  
+            answer += chunk.content
+    return {"answer": answer}
