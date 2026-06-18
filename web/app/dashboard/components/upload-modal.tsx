@@ -291,6 +291,7 @@ export function UploadModal({
       });
       if (!res.ok) {
         const errJSON = await res.json().catch(() => ({}));
+        console.error(errJSON.error);
         throw new Error(errJSON.error || "Upload failed");
       }
       const data = await res.json();
