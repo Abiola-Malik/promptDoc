@@ -276,6 +276,7 @@ export function UploadModal({
     const formData = new FormData();
     formData.append("file", zipFile);
     formData.append("name", projectName);
+    formData.append("source", "zip");
     formData.append("includeTests", String(includeTests));
     formData.append("includeDotfiles", String(includeDotfiles));
     formData.append(
@@ -284,7 +285,7 @@ export function UploadModal({
     );
 
     try {
-      const res = await fetch("/api/upload", {
+      const res = await fetch("/api/ingest", {
         method: "POST",
         body: formData,
       });
