@@ -33,8 +33,17 @@ def run_worker():
     logger.info("embed-service worker started — waiting for chunks...")
     # initialize clients once on startup
    
-    get_index()
-    get_embedder()
+    try:
+        logger.info("Testing get_index()...")
+        get_index()
+        logger.info("Testing get_embedder()...")
+        get_embedder()
+    except Exception as e:
+        import traceback
+        logger.critical("--- CRITICAL URL INITIALIZATION ERROR TRACEBACK ---")
+        logger.critical(traceback.format_exc())
+        logger.critical("-------------------------------------------------")
+        raise e
     logger.info("clients initialized")
 
     while True:
