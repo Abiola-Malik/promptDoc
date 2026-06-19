@@ -38,6 +38,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
+    if (file && file.size > 80 * 1024 * 1024) {
+      // 80MB
+      return NextResponse.json(
+        {
+          error:
+            "File too large. Maximum allowed is 80MB. Please remove large folders like venv, node_modules, etc.",
+        },
+        { status: 413 },
+      );
+    }
+
     // ── 3. Resolve project document ──────────────────────────────────────────
     const { databases } = await createSessionClient(sessionResult.session);
     let projectId: string;

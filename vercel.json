@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "web/**",
+      "use": "@vercel/next.js"
+    }
+  ],
+  "functions": {
+    "web/app/api/ingest/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024,
+      "maxBodySize": "100mb"
+    }
+  }
+}
