@@ -6,26 +6,13 @@ import { appwriteConfig } from "@/db/appwrite/config";
 import { ID } from "node-appwrite";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 300; // 5 minutes
+export const dynamic = "force-dynamic";
 
 const CHUNK_SERVICE_URL = process.env.CHUNK_SERVICE_URL!;
 const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET!;
 const { DatabaseId, projectsCollectionId } = appwriteConfig;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/ingest
-//
-// BFF proxy between Next.js and chunk-service. Handles two ingestion sources:
-//   - "zip"    → multipart file upload forwarded to /chunk/zip
-//   - "github" → repo metadata forwarded to /chunk/github
-//
-// Project lifecycle:
-//   handleSmartUpload may pre-create the Appwrite project document and pass
-//   its ID here via the "projectId" form field. If no projectId is provided
-//   (e.g. direct GitHub picker call from DashboardClient), this route creates
-//   the document itself. Either way, the document is updated with the job ID
-//   returned by chunk-service so the UI can poll /api/ingest/status.
-// ─────────────────────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
   try {
     // ── 1. Auth ──────────────────────────────────────────────────────────────
@@ -45,9 +32,6 @@ export async function POST(request: NextRequest) {
     const projectName =
       (formData.get("name") as string)?.trim() || "Untitled Project";
     const source = (formData.get("source") as string) || "zip";
-
-    // projectId is optionally pre-created by handleSmartUpload.
-    // If present, we update that document. If absent, we create a new one.
     const existingProjectId = formData.get("projectId") as string | null;
 
     if (!file && source === "zip") {
@@ -59,7 +43,6 @@ export async function POST(request: NextRequest) {
     let projectId: string;
 
     if (existingProjectId) {
-      // Validate the pre-created document exists and belongs to this user
       try {
         const doc = await databases.getDocument(
           DatabaseId,
@@ -77,7 +60,6 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      // Direct call (e.g. GitHub picker from DashboardClient) — create now.
       projectId = ID.unique();
       await databases.createDocument(
         DatabaseId,
@@ -93,15 +75,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 4. Forward to chunk-service ──────────────────────────────────────────
-    // chunk-service returns: { job_id, project_id, status, message }
-    // where message is a human string like "554 chunks queued"
+    // ── 4. Forward to chunk-service with timeout ─────────────────────────────
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 minutes
+
     let chunkResponse: Response;
 
     if (source === "github") {
-      // GitHub source — repo metadata sent as JSON body.
-      // chunk-service fetches file contents directly from GitHub API
-      // using the user's OAuth token so we never store raw code here.
       const repo = formData.get("repo") as string;
       const branch = (formData.get("branch") as string) || "main";
       const token = formData.get("token") as string;
@@ -122,11 +102,10 @@ export async function POST(request: NextRequest) {
             "x-internal-secret": INTERNAL_API_SECRET,
           },
           body: JSON.stringify({ repo, branch, token }),
+          signal: controller.signal,
         },
       );
     } else {
-      // ZIP source — forward multipart form directly.
-      // chunk-service handles extraction, filtering, and chunking.
       const serviceFormData = new FormData();
       serviceFormData.append("project_id", projectId);
       serviceFormData.append("file", file!);
@@ -135,15 +114,15 @@ export async function POST(request: NextRequest) {
         method: "POST",
         headers: { "x-internal-secret": INTERNAL_API_SECRET },
         body: serviceFormData,
+        signal: controller.signal,
       });
     }
+
+    clearTimeout(timeoutId);
 
     // ── 5. Handle chunk-service errors ───────────────────────────────────────
     if (!chunkResponse.ok) {
       const err = await chunkResponse.json().catch(() => ({}));
-
-      // mark project failed so the UI shows an error state instead of
-      // spinning forever on the progress poll
       await databases
         .updateDocument(DatabaseId, projectsCollectionId, projectId, {
           status: "failed",
@@ -159,9 +138,6 @@ export async function POST(request: NextRequest) {
     const chunkResult = await chunkResponse.json();
 
     // ── 6. Update project with job metadata ──────────────────────────────────
-    // Parse chunk count from the message string "554 chunks queued".
-    // The job_id is used by the UI to poll /api/ingest/status for real-time
-    // progress as embed-service processes chunks from the Redis queue.
     const chunksCount = parseInt(
       chunkResult.message?.match(/\d+/)?.[0] ?? "0",
       10,
@@ -173,7 +149,6 @@ export async function POST(request: NextRequest) {
         chunksCount,
       })
       .catch((err) => {
-        // non-fatal — job is already queued, polling will still work
         console.warn("Failed to update project with job metadata:", err);
       });
 
@@ -184,12 +159,18 @@ export async function POST(request: NextRequest) {
       message: chunkResult.message,
       chunksCount,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Ingest route error:", error);
+
+    if (error.name === "AbortError") {
+      return NextResponse.json(
+        { error: "Upload timed out. Please try a smaller ZIP file." },
+        { status: 408 },
+      );
+    }
+
     return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Internal server error",
-      },
+      { error: error.message || "Internal server error" },
       { status: 500 },
     );
   }

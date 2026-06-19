@@ -265,41 +265,53 @@ export function UploadModal({
       setError("No ZIP file selected");
       return;
     }
+
     setState("uploading");
     setProgress(10);
+    setError(null);
 
-    const getSelectedPaths = (node: FileNode): string[] => {
-      if (!node.children) return node.checked ? [node.path] : [];
-      return node.children.flatMap(getSelectedPaths);
-    };
-
-    const formData = new FormData();
-    formData.append("file", zipFile);
-    formData.append("name", projectName);
-    formData.append("source", "zip");
-    formData.append("includeTests", String(includeTests));
-    formData.append("includeDotfiles", String(includeDotfiles));
-    formData.append(
-      "selectedFiles",
-      JSON.stringify(getSelectedPaths(fileTree!)),
-    );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 300000); // 5 minutes
 
     try {
+      const formData = new FormData();
+      formData.append("file", zipFile);
+      formData.append("name", projectName);
+      formData.append("source", "zip");
+      formData.append("includeTests", String(includeTests));
+      formData.append("includeDotfiles", String(includeDotfiles));
+
+      const getSelectedPaths = (node: FileNode): string[] => {
+        if (!node.children) return node.checked ? [node.path] : [];
+        return node.children.flatMap(getSelectedPaths);
+      };
+
+      formData.append(
+        "selectedFiles",
+        JSON.stringify(getSelectedPaths(fileTree!)),
+      );
+
       const res = await fetch("/api/ingest", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
+
       if (!res.ok) {
         const errJSON = await res.json().catch(() => ({}));
-        console.error(errJSON.error);
         throw new Error(errJSON.error || "Upload failed");
       }
+
       const data = await res.json();
-      setProgress(20);
+
+      setProgress(25);
       setState("processing");
 
       if (data.jobId) {
         let consecutiveFailures = 0;
+
         pollRef.current = window.setInterval(async () => {
           try {
             const statusRes = await fetch(
@@ -308,40 +320,37 @@ export function UploadModal({
             if (!statusRes.ok) {
               if (++consecutiveFailures >= 5) {
                 clearInterval(pollRef.current!);
-                pollRef.current = null;
                 setError("Processing error. Please try again.");
                 setState("error");
               }
               return;
             }
+
             consecutiveFailures = 0;
             const status = await statusRes.json();
-            setProgress(20 + Math.round((status.progress_pct ?? 0) * 0.75));
+
+            setProgress(25 + Math.round((status.progress_pct ?? 0) * 0.7));
+
             if (status.status === "complete" || status.status === "partial") {
               clearInterval(pollRef.current!);
-              pollRef.current = null;
               setProgress(100);
               setState("complete");
-              if (timeoutRef.current !== null) {
-                clearTimeout(timeoutRef.current);
-              }
+
               timeoutRef.current = window.setTimeout(() => {
                 router.push(`/dashboard/project/${data.projectId}`);
                 onOpenChange(false);
-                timeoutRef.current = null;
-              }, 600);
+              }, 800);
             }
+
             if (status.status === "failed") {
               clearInterval(pollRef.current!);
-              pollRef.current = null;
-              setError("Processing failed. Please try again.");
+              setError("Processing failed.");
               setState("error");
             }
           } catch {
             if (++consecutiveFailures >= 5) {
               clearInterval(pollRef.current!);
-              pollRef.current = null;
-              setError("Network error while polling. Please try again.");
+              setError("Network error while polling.");
               setState("error");
             }
           }
@@ -349,18 +358,21 @@ export function UploadModal({
       } else {
         setProgress(100);
         setState("complete");
-        if (timeoutRef.current !== null) {
-          clearTimeout(timeoutRef.current);
-        }
-        timeoutRef.current = window.setTimeout(() => {
+        setTimeout(() => {
           router.push(`/dashboard/project/${data.projectId}`);
           onOpenChange(false);
-          timeoutRef.current = null;
-        }, 600);
+        }, 800);
       }
-    } catch {
-      setError("Upload failed. Please try again.");
-      setState("idle");
+    } catch (err: any) {
+      clearTimeout(timeout);
+      console.error(err);
+
+      if (err.name === "AbortError") {
+        setError("Upload timed out. Try a smaller ZIP (recommended < 50MB).");
+      } else {
+        setError(err.message || "Upload failed. Please try again.");
+      }
+      setState("error");
     }
   };
 
