@@ -363,14 +363,21 @@ export function UploadModal({
           onOpenChange(false);
         }, 800);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(timeout);
       console.error(err);
 
-      if (err.name === "AbortError") {
+      const hasName = (e: unknown): e is { name: string } =>
+        typeof e === "object" &&
+        e !== null &&
+        typeof (e as Record<string, unknown>).name === "string";
+
+      if (hasName(err) && err.name === "AbortError") {
         setError("Upload timed out. Try a smaller ZIP (recommended < 50MB).");
-      } else {
+      } else if (err instanceof Error) {
         setError(err.message || "Upload failed. Please try again.");
+      } else {
+        setError(String(err) || "Upload failed. Please try again.");
       }
       setState("error");
     }

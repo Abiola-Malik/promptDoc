@@ -159,18 +159,24 @@ export async function POST(request: NextRequest) {
       message: chunkResult.message,
       chunksCount,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Ingest route error:", error);
 
-    if (error.name === "AbortError") {
+    const hasName = (e: unknown): e is { name: string } =>
+      typeof e === "object" &&
+      e !== null &&
+      typeof (e as Record<string, unknown>).name === "string";
+
+    if (hasName(error) && error.name === "AbortError") {
       return NextResponse.json(
         { error: "Upload timed out. Please try a smaller ZIP file." },
         { status: 408 },
       );
     }
 
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: error.message || "Internal server error" },
+      { error: message || "Internal server error" },
       { status: 500 },
     );
   }
