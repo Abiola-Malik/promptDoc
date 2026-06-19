@@ -106,6 +106,7 @@ export function UploadModal({
     setEstimatedChunks(Math.round(selected * 2.8));
   };
 
+  const MAX_ZIP_SIZE_MB = 30;
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
@@ -113,6 +114,14 @@ export function UploadModal({
         setError("Please upload a .zip file");
         return;
       }
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > MAX_ZIP_SIZE_MB) {
+        setError(
+          `File is ${sizeMB.toFixed(1)}MB. Max size is ${MAX_ZIP_SIZE_MB}MB — try a smaller repo or exclude more folders.`,
+        );
+        return;
+      }
+
       setZipFile(file);
       setError(null);
       setState("analyzing");
@@ -315,7 +324,7 @@ export function UploadModal({
         pollRef.current = window.setInterval(async () => {
           try {
             const statusRes = await fetch(
-              `/api/ingest/status?jobId=${data.jobId}`,
+              `/api/ingest/status?jobId=${data.jobId}&projectId=${data.projectId}`,
             );
             if (!statusRes.ok) {
               if (++consecutiveFailures >= 5) {

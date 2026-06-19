@@ -20,7 +20,6 @@ async def critique_draft(state: GraphState) -> dict:
         SystemMessage(content=CRITIQUE_PROMPT),
         HumanMessage(content=(
             f"Documentation draft:\n{state['draft']}\n\n"
-            f"Code context it should cover:\n{state['context']}"
         ))
     ]
     answer= ""

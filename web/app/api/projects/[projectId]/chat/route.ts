@@ -10,7 +10,7 @@ const RAG_SERVICE_URL = process.env.RAG_SERVICE_URL!;
 const INTERNAL_API_SECRET = process.env.INTERNAL_API_SECRET!;
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST(
   request: NextRequest,

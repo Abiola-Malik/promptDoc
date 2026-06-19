@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     batch_size: int = 128
     max_retrieval_results: int = 8
     max_context_chunks: int = 12
-    max_critique_loops: int = 2
+    max_critique_loops: int = 1
     temperature: float = 0.2
     langchain_tracing: str = "false"
     langchain_api_key: str = ""

@@ -130,51 +130,174 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
             );
           }
 
-          const data = await response.json();
-          if (data && data.file) {
-            const { filename, content: fileContent, title } = data.file;
-            const result = await createGeneratedFile({
-              projectId,
-              filename,
-              content: fileContent,
-              title: title || filename,
-            });
+          // Streamed response: reuse the same SSE reader logic as normal chat
+          const reader = response.body?.getReader();
+          if (!reader) throw new Error("No response body");
 
-            const successMessage: Message = {
-              id: generatingMessageId,
-              role: "assistant",
-              content: `**${title || filename}** generated!\n\n Saved as \`${
-                result.path
-              }\`\n\nYou can now view and edit it in the file explorer.`,
-              timestamp: new Date(),
-            };
+          const decoder = new TextDecoder();
+          let buffer2 = "";
+          let fileContentAccum = "";
+          let fileMeta: { filename?: string; title?: string } | undefined;
+          let created = false;
 
-            // Update generating message to success
-            queryClient.setQueryData<Message[]>(
-              ["chat-messages", chatId],
-              (old) =>
-                (old || []).map((msg) =>
-                  msg.id === generatingMessageId ? successMessage : msg,
-                ),
-            );
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-            // Save success message to DB
-            addMessageMutation.mutate(successMessage);
+            buffer2 += decoder.decode(value, { stream: true });
+            const parts = buffer2.split("\n");
+            buffer2 = parts.pop() || "";
 
-            // Trigger file creation
-            if (typeof window !== "undefined") {
-              window.dispatchEvent(
-                new CustomEvent("promptdoc:generate-file", {
-                  detail: {
-                    path: result.path,
-                    content: fileContent,
-                    open: true,
-                  },
-                }),
-              );
+            for (const line of parts) {
+              if (!line.startsWith("data: ")) continue;
+              try {
+                const data = JSON.parse(line.slice(6));
+
+                if (data.type === "thinking") {
+                  setThinkingMessage(data.message);
+                  continue;
+                }
+
+                // Tokens that represent the file content
+                if (data.type === "token") {
+                  fileContentAccum += String(data.content ?? "");
+                }
+
+                // File metadata chunk or final file payload
+                if (data.type === "file") {
+                  // server may send a file object or metadata
+                  if (data.file && typeof data.file === "object") {
+                    fileMeta = {
+                      filename:
+                        typeof data.file.filename === "string"
+                          ? data.file.filename
+                          : undefined,
+                      title:
+                        typeof data.file.title === "string"
+                          ? data.file.title
+                          : undefined,
+                    };
+                    if (typeof data.file.content === "string") {
+                      fileContentAccum += data.file.content;
+                    }
+                  } else {
+                    if (typeof data.filename === "string") {
+                      fileMeta = { filename: data.filename, title: data.title };
+                    }
+                    if (typeof data.content === "string") {
+                      fileContentAccum += data.content;
+                    }
+                  }
+                }
+
+                // Done signal: create file and update messages
+                if (data.type === "done" || data.type === "file_done") {
+                  if (!created) {
+                    if (fileMeta && fileMeta.filename) {
+                      const filename = fileMeta.filename;
+                      const title = fileMeta.title || filename;
+                      const result = await createGeneratedFile({
+                        projectId,
+                        filename,
+                        content: fileContentAccum,
+                        title: title || filename,
+                      });
+
+                      const successMessage: Message = {
+                        id: generatingMessageId,
+                        role: "assistant",
+                        content: `**${title || filename}** generated!\n\n Saved as \`${
+                          result.path
+                        }\`\n\nYou can now view and edit it in the file explorer.`,
+                        timestamp: new Date(),
+                      };
+
+                      // Update generating message to success
+                      queryClient.setQueryData<Message[]>(
+                        ["chat-messages", chatId],
+                        (old) =>
+                          (old || []).map((msg) =>
+                            msg.id === generatingMessageId
+                              ? successMessage
+                              : msg,
+                          ),
+                      );
+
+                      // Save success message to DB
+                      addMessageMutation.mutate(successMessage);
+
+                      // Trigger file creation event
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(
+                          new CustomEvent("promptdoc:generate-file", {
+                            detail: {
+                              path: result.path,
+                              content: fileContentAccum,
+                              open: true,
+                            },
+                          }),
+                        );
+                      }
+
+                      created = true;
+                    } else {
+                      throw new Error("No file returned from server");
+                    }
+                  }
+                }
+
+                if (data.type === "error") {
+                  throw new Error(
+                    data.error || data.message || "An error occurred",
+                  );
+                }
+              } catch (parseError) {
+                if (parseError instanceof SyntaxError) continue;
+                throw parseError;
+              }
             }
-          } else {
-            throw new Error("No file returned from server");
+          }
+
+          if (!created) {
+            // If stream ended without a done/file_done, try to create if we have metadata
+            if (fileMeta && fileMeta.filename) {
+              const filename = fileMeta.filename;
+              const title = fileMeta.title || filename;
+              const result = await createGeneratedFile({
+                projectId,
+                filename,
+                content: fileContentAccum,
+                title: title || filename,
+              });
+
+              const successMessage: Message = {
+                id: generatingMessageId,
+                role: "assistant",
+                content: `**${title || filename}** generated!\n\n Saved as \`${result.path}\`\n\nYou can now view and edit it in the file explorer.`,
+                timestamp: new Date(),
+              };
+              queryClient.setQueryData<Message[]>(
+                ["chat-messages", chatId],
+                (old) =>
+                  (old || []).map((msg) =>
+                    msg.id === generatingMessageId ? successMessage : msg,
+                  ),
+              );
+              addMessageMutation.mutate(successMessage);
+              if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                  new CustomEvent("promptdoc:generate-file", {
+                    detail: {
+                      path: result.path,
+                      content: fileContentAccum,
+                      open: true,
+                    },
+                  }),
+                );
+              }
+            } else {
+              throw new Error("No file returned from server");
+            }
           }
         } catch (error) {
           if (error instanceof Error && error.name === "AbortError") {
