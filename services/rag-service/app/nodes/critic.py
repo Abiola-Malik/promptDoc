@@ -34,13 +34,6 @@ def should_refine(state: GraphState) -> str:
     critique = state.get("critique", "")
     loops = state.get("critique_loops", 0)
 
-    # Only treat the critique as approval if the response is exactly
-    # the approval token (stripped). This avoids false positives from
-    # phrases like "NOT APPROVED" or "UNAPPROVED".
-    # Finalize only when the critique explicitly approves or when the
-    # number of critique loops has exceeded the allowed maximum. Use
-    # '>' here so that hitting the configured max value still allows
-    # one more refinement pass (tests expect this behavior).
-    if critique.strip() == "APPROVED" or loops > settings.max_critique_loops:
+    if critique.strip() == "APPROVED" or loops >= settings.max_critique_loops:
         return "finalize"
     return "refine"
