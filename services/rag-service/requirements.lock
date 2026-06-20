@@ -88,6 +88,7 @@ python-dotenv==1.0.1
 pyyaml==6.0.3
 regex==2026.5.9
 requests==2.34.2
+redis==5.0.8
 requests-toolbelt==1.0.0
 rich==15.0.0
 shellingham==1.5.4

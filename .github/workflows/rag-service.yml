@@ -39,9 +39,9 @@ jobs:
           INTERNAL_API_SECRET: test-secret
           MAX_RETRIEVAL_RESULTS: 8
           MAX_CONTEXT_CHUNKS: 12
-          MAX_CRITIQUE_LOOPS: 2
+          MAX_CRITIQUE_LOOPS: 1
           TEMPERATURE: "0.2"
-          BATCH_SIZE: 32
+          BATCH_SIZE: 128
         run: pytest tests/ -v --tb=short
 
   docker:
@@ -69,9 +69,9 @@ jobs:
             -e INTERNAL_API_SECRET=test-secret \
             -e MAX_RETRIEVAL_RESULTS=8 \
             -e MAX_CONTEXT_CHUNKS=12 \
-            -e MAX_CRITIQUE_LOOPS=2 \
+            -e MAX_CRITIQUE_LOOPS=1 \
             -e TEMPERATURE=0.2 \
-            -e BATCH_SIZE=32 \
+            -e BATCH_SIZE=128 \
             rag-service:${{ github.sha }}
           sleep 4
           curl --fail http://localhost:8003/health

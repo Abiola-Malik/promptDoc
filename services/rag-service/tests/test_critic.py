@@ -38,7 +38,7 @@ def test_should_finalize_when_approved():
 def test_should_finalize_when_max_loops_reached():
     state = make_state(critique="Still needs work", loops=2)
     with patch("app.nodes.critic.settings") as mock_settings:
-        mock_settings.max_critique_loops = 2
+        mock_settings.max_critique_loops = 1
         result = should_refine(cast(GraphState, state))
     assert result == "finalize"
 
@@ -46,7 +46,7 @@ def test_should_finalize_when_max_loops_reached():
 def test_should_refine_before_max_loops():
     state = make_state(critique="Needs more examples", loops=1)
     with patch("app.nodes.critic.settings") as mock_settings:
-        mock_settings.max_critique_loops = 2
+        mock_settings.max_critique_loops = 1
         result = should_refine(cast(GraphState, state))
     assert result == "refine"
 
