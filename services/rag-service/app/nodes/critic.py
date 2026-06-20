@@ -39,6 +39,7 @@ def should_refine(state: GraphState) -> str:
     loops = state.get("critique_loops", 0)
 
     # case-insensitive check for approval token from the LLM
-    if "approved" in critique.lower() or loops >= settings.max_critique_loops:
+    # finalize only if explicitly approved, or if we've exceeded the allowed loops
+    if "approved" in critique.lower() or loops > settings.max_critique_loops:
         return "finalize"
     return "refine"
