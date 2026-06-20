@@ -324,13 +324,19 @@ export function ChatMessages({
             </div>
           ) : (
             <div className="space-y-4 pb-4">
-              {messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  msg={msg}
-                  markdownComponents={markdownComponents}
-                />
-              ))}
+              {(() => {
+                // Deduplicate messages by id (keep the last version).
+                const map = new Map<string, Message>();
+                messages.forEach((m) => map.set(m.id, m));
+                const displayMessages = Array.from(map.values());
+                return displayMessages.map((msg) => (
+                  <MessageBubble
+                    key={msg.id}
+                    msg={msg}
+                    markdownComponents={markdownComponents}
+                  />
+                ));
+              })()}
 
               {/* Thinking / Progress Message */}
               {thinkingMessage && (

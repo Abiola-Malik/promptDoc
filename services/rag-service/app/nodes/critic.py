@@ -31,15 +31,12 @@ async def critique_draft(state: GraphState) -> dict:
     return {"critique": critique, "critique_loops": loops}
 
 def should_refine(state: GraphState) -> str:
-    """
-    Conditional edge function.
-    Returns 'refine' or 'finalize' based on critique result and loop count.
-    """
     critique = state.get("critique", "")
     loops = state.get("critique_loops", 0)
 
-    # case-insensitive check for approval token from the LLM
-    # finalize only if explicitly approved, or if we've exceeded the allowed loops
-    if "approved" in critique.lower() or loops > settings.max_critique_loops:
+    # Only treat the critique as approval if the response is exactly
+    # the approval token (stripped). This avoids false positives from
+    # phrases like "NOT APPROVED" or "UNAPPROVED".
+    if critique.strip() == "APPROVED" or loops >= settings.max_critique_loops:
         return "finalize"
     return "refine"
