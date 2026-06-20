@@ -60,3 +60,14 @@ services:
     dns:
       - 8.8.8.8
       - 8.8.4.4
+  rag-doc-worker:
+    build: ./services/rag-service
+    env_file: ./services/rag-service/.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["python", "-m", "app.worker"]
+    restart: on-failure
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4

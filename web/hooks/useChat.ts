@@ -1,42 +1,123 @@
 // hooks/useChat.ts
 "use client";
+
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { saveMessage } from "@/lib/actions/chats.actions";
 import { createGeneratedFile } from "@/lib/actions/file.actions";
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 
-interface Message {
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type ChatIntent = "generate documentation" | undefined;
+
+export interface MessageSource {
+  score?: number;
+  metadata?: {
+    filename?: string;
+    startLine?: number;
+  };
+}
+
+export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  sources?: Array<{
-    score?: number;
-    metadata?: {
-      filename?: string;
-      startLine?: number;
-    };
-  }>;
+  sources?: MessageSource[];
 }
 
 interface UseChatOptions {
   projectId: string;
-  chatId: string | null;
+  chatId: string;
   onError?: (error: string) => void;
 }
+
+interface SendMessageOptions {
+  intent?: ChatIntent;
+}
+
+// ── SSE event shapes (Q&A streaming path only) ───────────────────────────────
+
+interface SSEThinkingEvent {
+  type: "thinking";
+  message: string;
+}
+interface SSEChunkEvent {
+  type: "chunk";
+  content: string;
+}
+interface SSESourcesEvent {
+  type: "sources";
+  sources: MessageSource[];
+}
+interface SSEDoneEvent {
+  type: "done";
+}
+interface SSEErrorEvent {
+  type: "error";
+  error: string;
+}
+
+type SSEEvent =
+  | SSEThinkingEvent
+  | SSEChunkEvent
+  | SSESourcesEvent
+  | SSEDoneEvent
+  | SSEErrorEvent;
+
+function isSSEEvent(value: unknown): value is SSEEvent {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof (value as { type: unknown }).type === "string"
+  );
+}
+
+// ── Doc-gen job polling types ─────────────────────────────────────────────────
+
+interface DocGenJobStatus {
+  job_id: string;
+  type: string;
+  status: "queued" | "running" | "complete" | "failed";
+  result_path: string;
+  error: string;
+  content?: string;
+}
+
+const DOC_GEN_POLL_INTERVAL_MS = 1800;
+const DOC_GEN_MAX_POLL_ATTEMPTS = 60; // ~108s ceiling — generous but bounded
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+//
+// Two distinct delivery mechanisms live side by side here, chosen per-intent:
+//
+// 1. Normal Q&A — SSE streaming via /api/projects/[id]/chat. Tokens render
+//    as they arrive. Backend (rag-service) holds the connection open for the
+//    duration of the LangGraph Q&A path, which reliably completes in 10-25s.
+//
+// 2. "generate documentation" — async job + polling via /api/generate-docs.
+//    The doc-gen LangGraph path (plan → draft → critique, multiple Gemini
+//    calls) routinely exceeds 45-100s, which is past the timeout ceiling of
+//    Vercel functions and Railway's proxy. Holding an SSE connection open
+//    that long is unreliable, so instead: POST enqueues the job and returns
+//    immediately; a separate worker (rag-doc-worker) runs the graph with no
+//    HTTP connection involved at all; the frontend polls a status endpoint
+//    every ~1.8s until the job completes. Same pattern already used for
+//    ZIP/GitHub ingestion via /api/ingest/status — chosen for consistency
+//    and because it's a proven pattern in this codebase already.
 
 export function useChat({ projectId, chatId, onError }: UseChatOptions) {
   const queryClient = useQueryClient();
   const [streamingMessage, setStreamingMessage] = useState("");
-  const [thinkingMessage, setThinkingMessage] = useState(""); // New: for progress/thinking steps
+  const [thinkingMessage, setThinkingMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const currentAssistantIdRef = useRef<string | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollCancelledRef = useRef(false);
 
-  // Mutation for adding messages (optimistic updates)
   const addMessageMutation = useMutation({
     mutationFn: async (message: Message) => {
-      if (!chatId) throw new Error("Missing chatId");
       await saveMessage({
         chatId,
         role: message.role,
@@ -49,22 +130,18 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
       return message;
     },
     onMutate: async (newMessage) => {
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ["chat-messages", chatId] });
-      // Snapshot previous value
       const previousMessages = queryClient.getQueryData<Message[]>([
         "chat-messages",
         chatId,
       ]);
-      // Optimistically update
       queryClient.setQueryData<Message[]>(["chat-messages", chatId], (old) => [
-        ...(old || []),
+        ...(old ?? []),
         newMessage,
       ]);
       return { previousMessages };
     },
-    onError: (err, newMessage, context) => {
-      // Rollback on error
+    onError: (err, _newMessage, context) => {
       queryClient.setQueryData(
         ["chat-messages", chatId],
         context?.previousMessages,
@@ -72,425 +149,302 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
       onError?.(err instanceof Error ? err.message : "Failed to save message");
     },
     onSettled: () => {
-      // Refetch after error or success
       queryClient.invalidateQueries({ queryKey: ["chat-messages", chatId] });
     },
   });
 
+  // Updates a message in the local query cache in place, identified by id.
+  // Used to show evolving progress text ("Queued..." → "Generating...")
+  // for the same logical assistant message without creating duplicates,
+  // before the mutation that ultimately persists the final version.
+  function upsertAssistantMessage(id: string, message: Message) {
+    queryClient.setQueryData<Message[]>(["chat-messages", chatId], (old) => {
+      const existing = old ?? [];
+      const idx = existing.findIndex((m) => m.id === id);
+      if (idx === -1) return [...existing, message];
+      const next = [...existing];
+      next[idx] = message;
+      return next;
+    });
+  }
+
+  // ── Q&A streaming path ───────────────────────────────────────────────────────
+  async function runStreamingChat(content: string) {
+    const assistantId = `assistant-${Date.now()}`;
+    abortControllerRef.current = new AbortController();
+
+    let accumulatedContent = "";
+    let sources: MessageSource[] | undefined;
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: content }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          (errorData as { error?: string }).error || "Failed to send message",
+        );
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(line.slice(6));
+          } catch {
+            continue;
+          }
+          if (!isSSEEvent(parsed)) continue;
+
+          switch (parsed.type) {
+            case "thinking":
+              setThinkingMessage(parsed.message);
+              break;
+            case "chunk":
+              accumulatedContent += parsed.content;
+              setStreamingMessage(accumulatedContent);
+              setThinkingMessage("");
+              break;
+            case "sources":
+              sources = parsed.sources;
+              break;
+            case "error":
+              throw new Error(parsed.error);
+            case "done": {
+              addMessageMutation.mutate({
+                id: assistantId,
+                role: "assistant",
+                content: accumulatedContent,
+                timestamp: new Date(),
+                sources,
+              });
+              setStreamingMessage("");
+              setThinkingMessage("");
+              break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        if (accumulatedContent) {
+          addMessageMutation.mutate({
+            id: assistantId,
+            role: "assistant",
+            content: accumulatedContent + "\n\n_[Generation stopped]_",
+            timestamp: new Date(),
+          });
+        }
+      } else {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to send message";
+        addMessageMutation.mutate({
+          id: assistantId,
+          role: "assistant",
+          content: `**Error:** ${errorMessage}`,
+          timestamp: new Date(),
+        });
+        onError?.(errorMessage);
+      }
+    } finally {
+      setStreamingMessage("");
+      setThinkingMessage("");
+    }
+  }
+
+  // ── Doc-gen async polling path ───────────────────────────────────────────────
+  async function runDocGeneration(content: string) {
+    const assistantId = `assistant-${Date.now()}`;
+    pollCancelledRef.current = false;
+
+    const placeholder: Message = {
+      id: assistantId,
+      role: "assistant",
+      content: "Queued — preparing to generate documentation...",
+      timestamp: new Date(),
+    };
+    upsertAssistantMessage(assistantId, placeholder);
+
+    try {
+      const startRes = await fetch("/api/generate-docs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: content, projectId }),
+      });
+
+      if (!startRes.ok) {
+        const err = await startRes.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error || "Failed to start generation",
+        );
+      }
+
+      const { jobId } = (await startRes.json()) as { jobId: string };
+
+      const progressLabels: Record<string, string> = {
+        queued: "Queued — waiting for a worker to pick this up...",
+        running: "Generating documentation — this can take up to a minute...",
+      };
+
+      let attempts = 0;
+
+      const poll = async (): Promise<void> => {
+        if (pollCancelledRef.current) return;
+
+        attempts += 1;
+        if (attempts > DOC_GEN_MAX_POLL_ATTEMPTS) {
+          const errorMessage =
+            "Generation is taking longer than expected. Please try again.";
+          upsertAssistantMessage(assistantId, {
+            ...placeholder,
+            content: `**Error:** ${errorMessage}`,
+          });
+          pollCancelledRef.current = true;
+          onError?.(errorMessage);
+          return;
+        }
+
+        const statusRes = await fetch(`/api/generate-docs/status/${jobId}`);
+        if (!statusRes.ok) {
+          pollTimeoutRef.current = setTimeout(poll, DOC_GEN_POLL_INTERVAL_MS);
+          return;
+        }
+
+        const status = (await statusRes.json()) as DocGenJobStatus;
+
+        if (status.status === "queued" || status.status === "running") {
+          upsertAssistantMessage(assistantId, {
+            ...placeholder,
+            content: progressLabels[status.status] ?? "Working on it...",
+          });
+          pollTimeoutRef.current = setTimeout(poll, DOC_GEN_POLL_INTERVAL_MS);
+          return;
+        }
+
+        if (status.status === "failed") {
+          const errorMessage =
+            status.error || "Documentation generation failed";
+          upsertAssistantMessage(assistantId, {
+            ...placeholder,
+            content: `**Error:** ${errorMessage}`,
+          });
+          pollCancelledRef.current = true;
+          onError?.(errorMessage);
+          return;
+        }
+
+        // complete — persist the generated markdown as a file in the project
+        const markdown = status.content ?? "";
+        const filename = "GENERATED_DOCS.md";
+
+        const result = await createGeneratedFile({
+          projectId,
+          filename,
+          content: markdown,
+          title: "Generated documentation",
+        });
+
+        addMessageMutation.mutate({
+          id: assistantId,
+          role: "assistant",
+          content: `**Generated documentation** is ready!\n\nSaved as \`${result.path}\`\n\nYou can now view and edit it in the file explorer.`,
+          timestamp: new Date(),
+        });
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("promptdoc:generate-file", {
+              detail: { path: result.path, content: markdown, open: true },
+            }),
+          );
+        }
+      };
+
+      await poll();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Documentation generation failed";
+      addMessageMutation.mutate({
+        id: assistantId,
+        role: "assistant",
+        content: `**Error:** ${errorMessage}`,
+        timestamp: new Date(),
+      });
+      onError?.(errorMessage);
+    }
+  }
+
+  // ── Public API ────────────────────────────────────────────────────────────────
+
   const sendMessage = useCallback(
-    async (
-      content: string,
-      options?: { intent?: "generate documentation" },
-    ) => {
+    async (content: string, options?: SendMessageOptions) => {
       if (!content.trim() || isLoading || !chatId) return;
 
-      const userMessage: Message = {
+      addMessageMutation.mutate({
         id: `user-${Date.now()}`,
         role: "user",
         content,
         timestamp: new Date(),
-      };
+      });
 
-      // Optimistically add user message
-      addMessageMutation.mutate(userMessage);
-
-      ///// DOCUMENTATION GENERATION FLOW /////
-      if (options?.intent === "generate documentation") {
-        setIsLoading(true);
-        const generatingMessageId = `assistant-${Date.now()}`;
-        currentAssistantIdRef.current = generatingMessageId;
-        const generatingMessage: Message = {
-          id: generatingMessageId,
-          role: "assistant",
-          content: "Generating documentation...",
-          timestamp: new Date(),
-        };
-        // Optimistically add generating message
-        queryClient.setQueryData<Message[]>(
-          ["chat-messages", chatId],
-          (old) => [...(old || []), generatingMessage],
-        );
-
-        abortControllerRef.current = new AbortController();
-        try {
-          const response = await fetch(`/api/projects/${projectId}/chat`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              message: content,
-              intent: "generate documentation",
-            }),
-            signal: abortControllerRef.current.signal,
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(
-              errorData.error || "Failed to generate documentation",
-            );
-          }
-
-          // Streamed response: reuse the same SSE reader logic as normal chat
-          const reader = response.body?.getReader();
-          if (!reader) throw new Error("No response body");
-
-          const decoder = new TextDecoder();
-          let buffer2 = "";
-          let fileContentAccum = "";
-          let fileMeta: { filename?: string; title?: string } | undefined;
-          let created = false;
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer2 += decoder.decode(value, { stream: true });
-            const parts = buffer2.split("\n");
-            buffer2 = parts.pop() || "";
-
-            for (const line of parts) {
-              if (!line.startsWith("data: ")) continue;
-              try {
-                const data = JSON.parse(line.slice(6));
-
-                if (data.type === "thinking") {
-                  setThinkingMessage(data.message);
-                  continue;
-                }
-
-                // Tokens that represent the file content
-                if (data.type === "token") {
-                  fileContentAccum += String(data.content ?? "");
-                }
-
-                // File metadata chunk or final file payload
-                if (data.type === "file") {
-                  // server may send a file object or metadata
-                  if (data.file && typeof data.file === "object") {
-                    fileMeta = {
-                      filename:
-                        typeof data.file.filename === "string"
-                          ? data.file.filename
-                          : undefined,
-                      title:
-                        typeof data.file.title === "string"
-                          ? data.file.title
-                          : undefined,
-                    };
-                    if (typeof data.file.content === "string") {
-                      fileContentAccum += data.file.content;
-                    }
-                  } else {
-                    if (typeof data.filename === "string") {
-                      fileMeta = { filename: data.filename, title: data.title };
-                    }
-                    if (typeof data.content === "string") {
-                      fileContentAccum += data.content;
-                    }
-                  }
-                }
-
-                // Done signal: create file and update messages
-                if (data.type === "done" || data.type === "file_done") {
-                  if (!created) {
-                    if (fileMeta && fileMeta.filename) {
-                      const filename = fileMeta.filename;
-                      const title = fileMeta.title || filename;
-                      const result = await createGeneratedFile({
-                        projectId,
-                        filename,
-                        content: fileContentAccum,
-                        title: title || filename,
-                      });
-
-                      const successMessage: Message = {
-                        id: generatingMessageId,
-                        role: "assistant",
-                        content: `**${title || filename}** generated!\n\n Saved as \`${
-                          result.path
-                        }\`\n\nYou can now view and edit it in the file explorer.`,
-                        timestamp: new Date(),
-                      };
-
-                      // Update generating message to success
-                      queryClient.setQueryData<Message[]>(
-                        ["chat-messages", chatId],
-                        (old) =>
-                          (old || []).map((msg) =>
-                            msg.id === generatingMessageId
-                              ? successMessage
-                              : msg,
-                          ),
-                      );
-
-                      // Save success message to DB
-                      addMessageMutation.mutate(successMessage);
-
-                      // Trigger file creation event
-                      if (typeof window !== "undefined") {
-                        window.dispatchEvent(
-                          new CustomEvent("promptdoc:generate-file", {
-                            detail: {
-                              path: result.path,
-                              content: fileContentAccum,
-                              open: true,
-                            },
-                          }),
-                        );
-                      }
-
-                      created = true;
-                    } else {
-                      throw new Error("No file returned from server");
-                    }
-                  }
-                }
-
-                if (data.type === "error") {
-                  throw new Error(
-                    data.error || data.message || "An error occurred",
-                  );
-                }
-              } catch (parseError) {
-                if (parseError instanceof SyntaxError) continue;
-                throw parseError;
-              }
-            }
-          }
-
-          if (!created) {
-            // If stream ended without a done/file_done, try to create if we have metadata
-            if (fileMeta && fileMeta.filename) {
-              const filename = fileMeta.filename;
-              const title = fileMeta.title || filename;
-              const result = await createGeneratedFile({
-                projectId,
-                filename,
-                content: fileContentAccum,
-                title: title || filename,
-              });
-
-              const successMessage: Message = {
-                id: generatingMessageId,
-                role: "assistant",
-                content: `**${title || filename}** generated!\n\n Saved as \`${result.path}\`\n\nYou can now view and edit it in the file explorer.`,
-                timestamp: new Date(),
-              };
-              queryClient.setQueryData<Message[]>(
-                ["chat-messages", chatId],
-                (old) =>
-                  (old || []).map((msg) =>
-                    msg.id === generatingMessageId ? successMessage : msg,
-                  ),
-              );
-              addMessageMutation.mutate(successMessage);
-              if (typeof window !== "undefined") {
-                window.dispatchEvent(
-                  new CustomEvent("promptdoc:generate-file", {
-                    detail: {
-                      path: result.path,
-                      content: fileContentAccum,
-                      open: true,
-                    },
-                  }),
-                );
-              }
-            } else {
-              throw new Error("No file returned from server");
-            }
-          }
-        } catch (error) {
-          if (error instanceof Error && error.name === "AbortError") {
-            return;
-          }
-          const errorMsg =
-            error instanceof Error
-              ? error.message
-              : "Failed to generate documentation";
-          const errorMessage: Message = {
-            id: generatingMessageId,
-            role: "assistant",
-            content: `**Error generating documentation:**\n\n${errorMsg}`,
-            timestamp: new Date(),
-          };
-          queryClient.setQueryData<Message[]>(
-            ["chat-messages", chatId],
-            (old) =>
-              (old || []).map((m) =>
-                m.id === generatingMessageId ? errorMessage : m,
-              ),
-          );
-          addMessageMutation.mutate(errorMessage);
-          onError?.(errorMsg);
-        } finally {
-          setIsLoading(false);
-          abortControllerRef.current = null;
-          currentAssistantIdRef.current = null;
-        }
-        return;
-      }
-
-      ///// NORMAL CHAT STREAMING /////
       setIsLoading(true);
       setStreamingMessage("");
-      setThinkingMessage(""); // Reset thinking state
-
-      const assistantId = `assistant-${Date.now()}`;
-      currentAssistantIdRef.current = assistantId;
-      abortControllerRef.current = new AbortController();
-
-      let accumulatedContent = "";
-      let sources: Message["sources"] | undefined = undefined;
-      let buffer = "";
+      setThinkingMessage("");
 
       try {
-        const response = await fetch(`/api/projects/${projectId}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: content }),
-          signal: abortControllerRef.current.signal,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to send message");
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response body");
-
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\n");
-          // keep last partial line in buffer
-          buffer = parts.pop() || "";
-
-          for (const line of parts) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              // Handle thinking / progress messages (like Grok)
-              if (data.type === "thinking") {
-                setThinkingMessage(data.message);
-                continue;
-              }
-
-              if (data.type === "token") {
-                accumulatedContent += String(data.content ?? "");
-                setStreamingMessage(accumulatedContent);
-                // Clear thinking when real content starts arriving
-                setThinkingMessage("");
-              }
-
-              if (data.type === "sources") {
-                const maybe = data.sources;
-                if (Array.isArray(maybe)) {
-                  sources = maybe.map((s: any) => ({
-                    score: typeof s?.score === "number" ? s.score : undefined,
-                    metadata:
-                      s && typeof s === "object" && s.metadata
-                        ? {
-                            filename:
-                              typeof s.metadata.filename === "string"
-                                ? s.metadata.filename
-                                : undefined,
-                            startLine:
-                              typeof s.metadata.startLine === "number"
-                                ? s.metadata.startLine
-                                : undefined,
-                          }
-                        : undefined,
-                  }));
-                }
-              }
-
-              if (data.type === "done") {
-                const finalMessage: Message = {
-                  id: assistantId,
-                  role: "assistant",
-                  content: accumulatedContent,
-                  timestamp: new Date(),
-                  sources,
-                };
-                addMessageMutation.mutate(finalMessage);
-                setStreamingMessage("");
-                setThinkingMessage("");
-                setIsLoading(false);
-              }
-
-              if (data.type === "error") {
-                throw new Error(data.message || "An error occurred");
-              }
-            } catch (parseError) {
-              if (parseError instanceof SyntaxError) continue;
-              throw parseError;
-            }
-          }
-        }
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          if (accumulatedContent) {
-            const partialMessage: Message = {
-              id: assistantId,
-              role: "assistant",
-              content: accumulatedContent + "\n\n_[Generation stopped]_",
-              timestamp: new Date(),
-            };
-            addMessageMutation.mutate(partialMessage);
-          }
-          setStreamingMessage("");
+        if (options?.intent === "generate documentation") {
+          await runDocGeneration(content);
         } else {
-          const errorMessage =
-            error instanceof Error ? error.message : "Failed to send message";
-          const errorMsg: Message = {
-            id: assistantId,
-            role: "assistant",
-            content: `**Error:** ${errorMessage}`,
-            timestamp: new Date(),
-          };
-          addMessageMutation.mutate(errorMsg);
-          setStreamingMessage("");
-          onError?.(errorMessage);
+          await runStreamingChat(content);
         }
       } finally {
         setIsLoading(false);
-        setThinkingMessage("");
         abortControllerRef.current = null;
-        currentAssistantIdRef.current = null;
       }
     },
-    [
-      projectId,
-      chatId,
-      isLoading,
-      thinkingMessage,
-      onError,
-      queryClient,
-      addMessageMutation,
-    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, chatId, isLoading, onError],
   );
 
   const stop = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+    abortControllerRef.current?.abort();
+    pollCancelledRef.current = true;
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
     }
+    setIsLoading(false);
   }, []);
 
-  const messages = (queryClient.getQueryData<Message[]>([
-    "chat-messages",
-    chatId,
-  ]) ?? []) as Message[];
+  const messages =
+    queryClient.getQueryData<Message[]>(["chat-messages", chatId]) ?? [];
 
   return {
     messages,
     streamingMessage,
-    thinkingMessage, // ← New: expose for UI
+    thinkingMessage,
     isLoading,
     sendMessage,
     stop,

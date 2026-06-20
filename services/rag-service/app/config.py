@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
+    redis_url: str = "redis://redis:6379" 
     gemini_api_key: str = ""
     voyage_api_key: str = ""
     pinecone_api_key: str = ""

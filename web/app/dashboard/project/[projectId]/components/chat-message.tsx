@@ -62,12 +62,21 @@ const MessageBubble = memo(
                         prose-strong:text-[#ededed] prose-code:text-[#ccc]
                         prose-a:text-[#3ecf8e]"
           >
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-            >
-              {msg.content}
-            </ReactMarkdown>
+            {/* in-progress doc-gen placeholder gets a pulsing dot instead of markdown rendering */}
+            {msg.content.startsWith("Queued") ||
+            msg.content.startsWith("Generating documentation") ? (
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
+                <span className="text-[13px] text-[#888]">{msg.content}</span>
+              </div>
+            ) : (
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+              >
+                {msg.content}
+              </ReactMarkdown>
+            )}
 
             {msg.sources &&
               msg.sources.length > 0 &&
