@@ -1,450 +1,477 @@
+// hooks/useChat.ts
 "use client";
 
-import { useRef, useEffect, useState, useMemo, memo } from "react";
-import { Textarea } from "@/lib/components/ui/textarea";
-import { Send, X, Copy, Check } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import remarkGfm from "remark-gfm";
-import type { ReactNode } from "react";
-import { useChat } from "@/hooks/useChat";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { saveMessage } from "@/lib/actions/chats.actions";
+import { createGeneratedFile } from "@/lib/actions/file.actions";
+import { useState, useCallback, useRef } from "react";
 
-interface Message {
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export type ChatIntent = "generate documentation" | undefined;
+
+export interface MessageSource {
+  score?: number;
+  metadata?: {
+    filename?: string;
+    startLine?: number;
+  };
+}
+
+export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  sources?: Array<{
-    score?: number;
-    metadata?: { filename?: string; startLine?: number };
-  }>;
+  sources?: MessageSource[];
 }
 
-interface ChatMessagesProps {
+interface UseChatOptions {
   projectId: string;
   chatId: string;
-  messages: Message[];
-  isLoadingHistory: boolean;
+  onError?: (error: string) => void;
 }
 
-type CodeProps = {
-  node?: unknown;
-  inline?: boolean;
-  className?: string;
-  children?: ReactNode;
-} & React.HTMLAttributes<HTMLElement>;
+interface SendMessageOptions {
+  intent?: ChatIntent;
+}
 
-// ── Message bubble ───────────────────────────────────────────────────────────
-// No avatars, no gradients, no shadows. Role is communicated by alignment +
-// a subtle background tint only on user messages. Assistant messages are
-// borderless — they read as part of the page, not as a "card".
-const MessageBubble = memo(
-  ({
-    msg,
-    markdownComponents,
-  }: {
-    msg: Message;
-    markdownComponents: Record<string, unknown>;
-  }) => (
-    <div
-      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-    >
-      <div
-        className={`max-w-[85%] sm:max-w-[70%] rounded-md px-3.5 py-2.5
-      ${msg.role === "user" ? "bg-[#1a1a1a]" : ""}`}
-      >
-        {msg.role === "assistant" ? (
-          <div
-            className="prose prose-sm prose-invert max-w-none
-                        prose-p:text-[13px] prose-p:leading-relaxed prose-p:text-[#ccc]
-                        prose-headings:text-[#ededed] prose-headings:font-medium
-                        prose-strong:text-[#ededed] prose-code:text-[#ccc]
-                        prose-a:text-[#3ecf8e]"
-          >
-            {/* in-progress doc-gen placeholder gets a pulsing dot instead of markdown rendering */}
-            {msg.content.startsWith("Queued") ||
-            msg.content.startsWith("Generating documentation") ? (
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
-                <span className="text-[13px] text-[#888]">{msg.content}</span>
-              </div>
-            ) : (
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={markdownComponents}
-              >
-                {msg.content}
-              </ReactMarkdown>
-            )}
+// ── SSE event shapes (Q&A streaming path only) ───────────────────────────────
 
-            {msg.sources &&
-              msg.sources.length > 0 &&
-              (() => {
-                const validSources = msg.sources.filter(
-                  (s) =>
-                    s &&
-                    s.metadata &&
-                    typeof s.metadata.filename === "string" &&
-                    s.metadata.filename.trim() !== "" &&
-                    s.metadata.startLine != null,
-                );
+interface SSEThinkingEvent {
+  type: "thinking";
+  message: string;
+}
+interface SSEChunkEvent {
+  type: "chunk";
+  content: string;
+}
+interface SSESourcesEvent {
+  type: "sources";
+  sources: MessageSource[];
+}
+interface SSEDoneEvent {
+  type: "done";
+}
+interface SSEErrorEvent {
+  type: "error";
+  error: string;
+}
 
-                if (validSources.length === 0) {
-                  return (
-                    <div className="mt-3 pt-3 border-t border-[#1a1a1a]">
-                      <p className="text-[10px] uppercase tracking-widest text-[#444] mb-1.5">
-                        Sources
-                      </p>
-                      <div className="text-[11px] text-[#666]">
-                        Unknown source
-                      </div>
-                    </div>
-                  );
-                }
+type SSEEvent =
+  | SSEThinkingEvent
+  | SSEChunkEvent
+  | SSESourcesEvent
+  | SSEDoneEvent
+  | SSEErrorEvent;
 
-                return (
-                  <div className="mt-3 pt-3 border-t border-[#1a1a1a]">
-                    <p className="text-[10px] uppercase tracking-widest text-[#444] mb-1.5">
-                      Sources
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {validSources.slice(0, 8).map((src, i) => (
-                        <span
-                          key={i}
-                          className="text-[11px] font-mono text-[#666] bg-[#141414]
-                                   border border-[#1f1f1f] rounded px-2 py-0.5"
-                        >
-                          {src.metadata!.filename}:{src.metadata!.startLine}
-                          <span className="text-[#3ecf8e] ml-1.5">
-                            {((src.score ?? 0) * 100).toFixed(0)}%
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-          </div>
-        ) : (
-          <p className="text-[13px] leading-relaxed text-[#ededed] break-words">
-            {msg.content}
-          </p>
-        )}
-      </div>
-    </div>
-  ),
-);
-MessageBubble.displayName = "MessageBubble";
+function isSSEEvent(value: unknown): value is SSEEvent {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    typeof (value as { type: unknown }).type === "string"
+  );
+}
 
-const LoadingSkeleton = () => (
-  <div className="flex justify-start">
-    <div className="max-w-[70%] rounded-md px-3.5 py-2.5 space-y-2">
-      <div className="h-3 bg-[#141414] rounded w-3/4 animate-pulse" />
-      <div className="h-3 bg-[#141414] rounded w-full animate-pulse" />
-      <div className="h-3 bg-[#141414] rounded w-5/6 animate-pulse" />
-    </div>
-  </div>
-);
+// ── Doc-gen job polling types ─────────────────────────────────────────────────
 
-export function ChatMessages({
-  projectId,
-  chatId,
-  messages,
-  isLoadingHistory,
-}: ChatMessagesProps) {
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const [input, setInput] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"chat" | "generate-docs">("chat");
+interface DocGenJobStatus {
+  job_id: string;
+  type: string;
+  status: "queued" | "running" | "complete" | "failed";
+  result_path: string;
+  error: string;
+  content?: string;
+}
 
-  const { streamingMessage, isLoading, sendMessage, thinkingMessage, stop } =
-    useChat({
-      projectId,
-      chatId,
-    });
+const DOC_GEN_POLL_INTERVAL_MS = 1800;
+const DOC_GEN_MAX_POLL_ATTEMPTS = 60; // ~108s ceiling — generous but bounded
 
-  useEffect(() => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const { scrollTop, scrollHeight, clientHeight } = viewport;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-    if (isNearBottom) {
-      viewport.scrollTo({
-        top: scrollHeight,
-        behavior: isLoading && streamingMessage ? "auto" : "smooth",
+// ── Hook ──────────────────────────────────────────────────────────────────────
+//
+// Two delivery mechanisms, chosen per-intent:
+//
+// 1. Normal Q&A — SSE streaming via /api/projects/[id]/chat. Tokens render
+//    as they arrive via local `streamingMessage` state. The final message is
+//    persisted into the shared React Query cache once the stream completes.
+//
+// 2. "generate documentation" — async job + polling via /api/generate-docs.
+//    The doc-gen LangGraph path (plan → draft → critique) routinely exceeds
+//    typical HTTP proxy timeout windows, so instead of streaming: POST
+//    enqueues the job and returns immediately, a background worker runs the
+//    graph with no HTTP connection involved, and the frontend polls a status
+//    endpoint until the job completes.
+//
+// IMPORTANT — cache subscription:
+// `messages` is read via `useQuery` with `enabled: false`. This is what
+// makes this hook reactive. `chat-panel.tsx` owns the real query that fetches
+// message history from Appwrite on mount under the same queryKey
+// ["chat-messages", chatId]. This hook never re-fetches that data; it only
+// subscribes to the same cache entry so that whenever `addMessageMutation`'s
+// setQueryData call updates it (e.g. when an SSE stream finishes), React
+// Query notifies this component and it re-renders. A plain
+// queryClient.getQueryData(...) call reads the cache once at render time and
+// is never notified of later updates — which is why streamed Q&A answers
+// previously vanished even though the mutation succeeded and the cache was
+// correct underneath.
+
+export function useChat({ projectId, chatId, onError }: UseChatOptions) {
+  const queryClient = useQueryClient();
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [thinkingMessage, setThinkingMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollCancelledRef = useRef(false);
+
+  // Subscribes to the message cache without ever fetching on its own.
+  // enabled: false means this query never runs its own network request —
+  // it purely mirrors whatever chat-panel.tsx's real query has already put
+  // in the cache, and re-renders this component on every write to that key.
+  const { data: messages = [] } = useQuery<Message[]>({
+    queryKey: ["chat-messages", chatId],
+    queryFn: () => Promise.resolve([]),
+    enabled: false,
+    staleTime: Infinity,
+  });
+
+  const addMessageMutation = useMutation({
+    mutationFn: async (message: Message) => {
+      await saveMessage({
+        chatId,
+        role: message.role,
+        content: message.content,
+        projectId,
+        sources: message.sources?.map(
+          (source) => source.metadata?.filename || JSON.stringify(source),
+        ),
       });
-    }
-  }, [messages, streamingMessage, isLoading]);
+      return message;
+    },
+    onMutate: async (newMessage) => {
+      await queryClient.cancelQueries({ queryKey: ["chat-messages", chatId] });
+      const previousMessages = queryClient.getQueryData<Message[]>([
+        "chat-messages",
+        chatId,
+      ]);
+      queryClient.setQueryData<Message[]>(["chat-messages", chatId], (old) => [
+        ...(old ?? []),
+        newMessage,
+      ]);
+      return { previousMessages };
+    },
+    onError: (err, _newMessage, context) => {
+      queryClient.setQueryData(
+        ["chat-messages", chatId],
+        context?.previousMessages,
+      );
+      onError?.(err instanceof Error ? err.message : "Failed to save message");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", chatId] });
+    },
+  });
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
-    const trimmed = input.trim();
-    if (mode === "generate-docs") {
-      sendMessage(trimmed, { intent: "generate documentation" });
-    } else {
-      sendMessage(trimmed);
-    }
-    setInput("");
-    setMode("chat");
+  // Updates a message in the local query cache in place, identified by id.
+  // Used for evolving progress text ("Queued..." → "Generating...") on the
+  // same logical assistant message without creating duplicates, before the
+  // mutation that ultimately persists the final version. Uses setQueryData
+  // directly (not the mutation) because these are transient UI states that
+  // should never be written to Appwrite.
+  function upsertAssistantMessage(id: string, message: Message) {
+    queryClient.setQueryData<Message[]>(["chat-messages", chatId], (old) => {
+      const existing = old ?? [];
+      const idx = existing.findIndex((m) => m.id === id);
+      if (idx === -1) return [...existing, message];
+      const next = [...existing];
+      next[idx] = message;
+      return next;
+    });
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit(e);
-    }
-  }
+  // ── Q&A streaming path ───────────────────────────────────────────────────────
+  async function runStreamingChat(content: string) {
+    const assistantId = `assistant-${Date.now()}`;
+    abortControllerRef.current = new AbortController();
 
-  async function copyToClipboard(content: string, id: string) {
+    let accumulatedContent = "";
+    let sources: MessageSource[] | undefined;
+
     try {
-      await navigator.clipboard.writeText(content);
-    } catch {
-      const el = document.createElement("textarea");
-      el.value = content;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand("copy");
-      document.body.removeChild(el);
+      const response = await fetch(`/api/projects/${projectId}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: content }),
+        signal: abortControllerRef.current.signal,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          (errorData as { error?: string }).error || "Failed to send message",
+        );
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(line.slice(6));
+          } catch {
+            continue;
+          }
+          if (!isSSEEvent(parsed)) continue;
+
+          switch (parsed.type) {
+            case "thinking":
+              setThinkingMessage(parsed.message);
+              break;
+            case "chunk":
+              accumulatedContent += parsed.content;
+              setStreamingMessage(accumulatedContent);
+              setThinkingMessage("");
+              break;
+            case "sources":
+              sources = parsed.sources;
+              break;
+            case "error":
+              throw new Error(parsed.error);
+            case "done": {
+              addMessageMutation.mutate({
+                id: assistantId,
+                role: "assistant",
+                content: accumulatedContent,
+                timestamp: new Date(),
+                sources,
+              });
+              // Clear local streaming state — the message now lives in the
+              // shared cache (subscribed to via useQuery above), so the UI
+              // continues showing it without a gap.
+              setStreamingMessage("");
+              setThinkingMessage("");
+              break;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        if (accumulatedContent) {
+          addMessageMutation.mutate({
+            id: assistantId,
+            role: "assistant",
+            content: accumulatedContent + "\n\n_[Generation stopped]_",
+            timestamp: new Date(),
+          });
+        }
+      } else {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to send message";
+        addMessageMutation.mutate({
+          id: assistantId,
+          role: "assistant",
+          content: `**Error:** ${errorMessage}`,
+          timestamp: new Date(),
+        });
+        onError?.(errorMessage);
+      }
+    } finally {
+      setStreamingMessage("");
+      setThinkingMessage("");
     }
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 1500);
   }
 
-  const markdownComponents = useMemo(
-    () => ({
-      code({ inline, className, children, ...props }: CodeProps) {
-        const match = /language-(\w+)/.exec(className || "");
-        const codeString = String(children).replace(/\n$/, "");
-        const codeId = `code-${codeString.length}-${codeString.slice(0, 30)}`;
+  // ── Doc-gen async polling path ───────────────────────────────────────────────
+  async function runDocGeneration(content: string) {
+    const assistantId = `assistant-${Date.now()}`;
+    pollCancelledRef.current = false;
 
-        if (!inline && match) {
-          return (
-            <div className="my-3 -mx-3.5 rounded-md overflow-hidden border border-[#1a1a1a]">
-              <div
-                className="flex items-center justify-between bg-[#0a0a0a] px-3 py-1.5
-                            border-b border-[#1a1a1a]"
-              >
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#444]">
-                  {match[1]}
-                </span>
-                <button
-                  onClick={() => copyToClipboard(codeString, codeId)}
-                  className="flex items-center gap-1 text-[10px] text-[#555] hover:text-[#999]
-                           transition-colors"
-                >
-                  {copiedId === codeId ? (
-                    <>
-                      <Check className="w-3 h-3" /> Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3 h-3" /> Copy
-                    </>
-                  )}
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <SyntaxHighlighter
-                  style={vscDarkPlus as { [key: string]: React.CSSProperties }}
-                  language={match[1]}
-                  PreTag="div"
-                  customStyle={{
-                    margin: 0,
-                    borderRadius: 0,
-                    fontSize: "12px",
-                    background: "#0d0d0d",
-                  }}
-                >
-                  {codeString}
-                </SyntaxHighlighter>
-              </div>
-            </div>
-          );
+    const placeholder: Message = {
+      id: assistantId,
+      role: "assistant",
+      content: "Queued — preparing to generate documentation...",
+      timestamp: new Date(),
+    };
+    upsertAssistantMessage(assistantId, placeholder);
+
+    try {
+      const startRes = await fetch("/api/generate-docs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: content, projectId }),
+      });
+
+      if (!startRes.ok) {
+        const err = await startRes.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error || "Failed to start generation",
+        );
+      }
+
+      const { jobId } = (await startRes.json()) as { jobId: string };
+
+      const progressLabels: Record<string, string> = {
+        queued: "Queued — waiting for a worker to pick this up...",
+        running: "Generating documentation — this can take up to a minute...",
+      };
+
+      let attempts = 0;
+
+      const poll = async (): Promise<void> => {
+        if (pollCancelledRef.current) return;
+
+        attempts += 1;
+        if (attempts > DOC_GEN_MAX_POLL_ATTEMPTS) {
+          const errorMessage =
+            "Generation is taking longer than expected. Please try again.";
+          upsertAssistantMessage(assistantId, {
+            ...placeholder,
+            content: `**Error:** ${errorMessage}`,
+          });
+          pollCancelledRef.current = true;
+          onError?.(errorMessage);
+          return;
         }
 
-        return (
-          <code
-            className="rounded bg-[#1a1a1a] px-1 py-0.5 text-[12px]"
-            {...props}
-          >
-            {children}
-          </code>
-        );
-      },
-    }),
-    [copiedId],
-  );
+        const statusRes = await fetch(`/api/generate-docs/status/${jobId}`);
+        if (!statusRes.ok) {
+          pollTimeoutRef.current = setTimeout(poll, DOC_GEN_POLL_INTERVAL_MS);
+          return;
+        }
 
-  if (isLoadingHistory) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="w-4 h-4 rounded-full border-2 border-[#222] border-t-[#555] animate-spin" />
-      </div>
-    );
+        const status = (await statusRes.json()) as DocGenJobStatus;
+
+        if (status.status === "queued" || status.status === "running") {
+          upsertAssistantMessage(assistantId, {
+            ...placeholder,
+            content: progressLabels[status.status] ?? "Working on it...",
+          });
+          pollTimeoutRef.current = setTimeout(poll, DOC_GEN_POLL_INTERVAL_MS);
+          return;
+        }
+
+        if (status.status === "failed") {
+          const errorMessage =
+            status.error || "Documentation generation failed";
+          upsertAssistantMessage(assistantId, {
+            ...placeholder,
+            content: `**Error:** ${errorMessage}`,
+          });
+          pollCancelledRef.current = true;
+          onError?.(errorMessage);
+          return;
+        }
+
+        // complete — persist the generated markdown as a file in the project.
+        // Goes through addMessageMutation (not upsertAssistantMessage) since
+        // the final confirmation should be saved to Appwrite, unlike the
+        // transient "Queued.../Generating..." progress states above.
+        const markdown = status.content ?? "";
+        const filename = "GENERATED_DOCS.md";
+
+        const result = await createGeneratedFile({
+          projectId,
+          filename,
+          content: markdown,
+          title: "Generated documentation",
+        });
+
+        addMessageMutation.mutate({
+          id: assistantId,
+          role: "assistant",
+          content: `**Generated documentation** is ready!\n\nSaved as \`${result.path}\`\n\nYou can now view and edit it in the file explorer.`,
+          timestamp: new Date(),
+        });
+
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("promptdoc:generate-file", {
+              detail: { path: result.path, content: markdown, open: true },
+            }),
+          );
+        }
+      };
+
+      await poll();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Documentation generation failed";
+      addMessageMutation.mutate({
+        id: assistantId,
+        role: "assistant",
+        content: `**Error:** ${errorMessage}`,
+        timestamp: new Date(),
+      });
+      onError?.(errorMessage);
+    }
   }
 
-  const suggestions = [
-    "Generate full project documentation",
-    "Explain the authentication flow",
-    "Document the LanguageSelect component",
-    "How does data fetching work?",
-  ];
+  // ── Public API ────────────────────────────────────────────────────────────────
 
-  return (
-    <div className="flex h-full flex-col">
-      {/* messages */}
-      <div ref={viewportRef} className="flex-1 overflow-y-auto px-4 py-6">
-        <div className="mx-auto max-w-2xl">
-          {messages.length === 0 && !streamingMessage ? (
-            <div className="flex min-h-full flex-col items-center justify-center gap-8 py-16 text-center">
-              <div className="space-y-1.5">
-                <p className="text-[15px] text-[#ccc]">
-                  Ask your code anything
-                </p>
-                <p className="text-[12px] text-[#444]">
-                  Generate docs · explain logic · find components
-                </p>
-              </div>
+  const sendMessage = useCallback(
+    async (content: string, options?: SendMessageOptions) => {
+      if (!content.trim() || isLoading || !chatId) return;
 
-              <div className="grid w-full max-w-md grid-cols-1 gap-1.5">
-                {suggestions.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setInput(s)}
-                    className="rounded-md border border-[#1a1a1a] px-3.5 py-2.5 text-left
-                               text-[12px] text-[#666] hover:border-[#2a2a2a]
-                               hover:bg-[#0f0f0f] hover:text-[#999] transition-colors"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 pb-4">
-              {(() => {
-                // Deduplicate messages by id, but prefer the last occurrence
-                // (so updated/finalized messages replace placeholders) while
-                // preserving chronological ordering.
-                const map = new Map<string, Message>();
-                for (let i = messages.length - 1; i >= 0; i--) {
-                  const m = messages[i];
-                  if (!map.has(m.id)) map.set(m.id, m);
-                }
-                const displayMessages = Array.from(map.values()).reverse();
-                return displayMessages.map((msg) => (
-                  <MessageBubble
-                    key={msg.id}
-                    msg={msg}
-                    markdownComponents={markdownComponents}
-                  />
-                ));
-              })()}
+      addMessageMutation.mutate({
+        id: `user-${Date.now()}`,
+        role: "user",
+        content,
+        timestamp: new Date(),
+      });
 
-              {/* Thinking / Progress Message */}
-              {thinkingMessage && (
-                <div className="flex justify-start">
-                  <div className="max-w-[70%] rounded-md px-3.5 py-2.5">
-                    <div className="flex items-center gap-3 text-sm text-[#888] italic">
-                      <div className="w-2 h-2 bg-[#888] rounded-full animate-pulse" />
-                      {thinkingMessage}
-                    </div>
-                  </div>
-                </div>
-              )}
+      setIsLoading(true);
+      setStreamingMessage("");
+      setThinkingMessage("");
 
-              {/* Streaming Answer */}
-              {isLoading && streamingMessage && (
-                <div className="flex justify-start">
-                  <div className="max-w-[70%] rounded-md px-3.5 py-2.5">
-                    <div
-                      className="prose prose-sm prose-invert max-w-none
-                                    prose-p:text-[13px] prose-p:text-[#ccc]"
-                    >
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={markdownComponents}
-                      >
-                        {streamingMessage}
-                      </ReactMarkdown>
-                    </div>
-                    <span className="inline-block w-1.5 h-3.5 bg-[#555] ml-0.5 animate-pulse" />
-                  </div>
-                </div>
-              )}
-
-              {isLoading && !streamingMessage && <LoadingSkeleton />}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* input */}
-      <div className="border-t border-[#1a1a1a] px-4 py-3 shrink-0">
-        <div className="mx-auto max-w-2xl">
-          {/* mode toggle */}
-          <div className="flex gap-1 mb-2">
-            <button
-              type="button"
-              onClick={() => setMode("chat")}
-              disabled={isLoading}
-              className={`px-2.5 py-1 rounded text-[11px] transition-colors disabled:opacity-40
-                ${mode === "chat" ? "bg-[#1a1a1a] text-[#ededed]" : "text-[#555] hover:text-[#888]"}`}
-            >
-              Chat
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("generate-docs")}
-              disabled={isLoading}
-              className={`px-2.5 py-1 rounded text-[11px] transition-colors disabled:opacity-40
-                ${mode === "generate-docs" ? "bg-[#1a1a1a] text-[#ededed]" : "text-[#555] hover:text-[#888]"}`}
-            >
-              Generate docs
-            </button>
-          </div>
-
-          {/* input row */}
-          <form onSubmit={handleSubmit} className="flex gap-2 items-end">
-            <Textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={
-                mode === "generate-docs"
-                  ? "Describe the docs you want..."
-                  : "Ask about your code..."
-              }
-              className="min-h-9 max-h-32 resize-none rounded-md border-[#1f1f1f]
-                         bg-[#0f0f0f] px-3 py-2 text-[13px] text-[#ededed]
-                         placeholder:text-[#3f3f3f] focus-visible:ring-0
-                         focus-visible:border-[#333]"
-              disabled={isLoading}
-              rows={1}
-            />
-            <button
-              type={isLoading ? "button" : "submit"}
-              onClick={isLoading ? stop : undefined}
-              disabled={!isLoading && !input.trim()}
-              className="h-9 w-9 shrink-0 flex items-center justify-center rounded-md
-                         bg-[#1a1a1a] hover:bg-[#222] text-[#ccc]
-                         disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              {isLoading ? (
-                <X className="w-4 h-4" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-            </button>
-          </form>
-
-          <p className="mt-1.5 text-[10px] text-[#333]">
-            Enter to send · Shift+Enter for new line
-          </p>
-        </div>
-      </div>
-    </div>
+      try {
+        if (options?.intent === "generate documentation") {
+          await runDocGeneration(content);
+        } else {
+          await runStreamingChat(content);
+        }
+      } finally {
+        setIsLoading(false);
+        abortControllerRef.current = null;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, chatId, isLoading, onError],
   );
+
+  const stop = useCallback(() => {
+    abortControllerRef.current?.abort();
+    pollCancelledRef.current = true;
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+    setIsLoading(false);
+  }, []);
+
+  return {
+    messages,
+    streamingMessage,
+    thinkingMessage,
+    isLoading,
+    sendMessage,
+    stop,
+  };
 }
