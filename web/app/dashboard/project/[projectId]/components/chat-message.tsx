@@ -325,10 +325,15 @@ export function ChatMessages({
           ) : (
             <div className="space-y-4 pb-4">
               {(() => {
-                // Deduplicate messages by id (keep the last version).
+                // Deduplicate messages by id, but prefer the last occurrence
+                // (so updated/finalized messages replace placeholders) while
+                // preserving chronological ordering.
                 const map = new Map<string, Message>();
-                messages.forEach((m) => map.set(m.id, m));
-                const displayMessages = Array.from(map.values());
+                for (let i = messages.length - 1; i >= 0; i--) {
+                  const m = messages[i];
+                  if (!map.has(m.id)) map.set(m.id, m);
+                }
+                const displayMessages = Array.from(map.values()).reverse();
                 return displayMessages.map((msg) => (
                   <MessageBubble
                     key={msg.id}
