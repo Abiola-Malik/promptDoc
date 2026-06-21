@@ -92,6 +92,12 @@ async def query(request: QueryRequest, _=Depends(verify_secret)):
                     continue
 
                 if kind == "on_chat_model_stream":
+                    metadata = event.get("metadata") or {}
+                    print("DEBUG node:", metadata.get("langgraph_node"), "all metadata keys:", list(metadata.keys()))
+                    node_name = metadata.get("langgraph_node")
+                    if node_name != "generate":
+                        continue # skip tokens from expand/plan/draft/critique
+                    
                     data = event.get("data") or {}
                     chunk = data.get("chunk") if isinstance(data, dict) else None
                     content = None
