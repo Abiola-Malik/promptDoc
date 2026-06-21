@@ -42,8 +42,8 @@ interface SSEThinkingEvent {
   type: "thinking";
   message: string;
 }
-interface SSEChunkEvent {
-  type: "chunk";
+interface SSETokenEvent {
+  type: "token";
   content: string;
 }
 interface SSESourcesEvent {
@@ -60,7 +60,7 @@ interface SSEErrorEvent {
 
 type SSEEvent =
   | SSEThinkingEvent
-  | SSEChunkEvent
+  | SSETokenEvent
   | SSESourcesEvent
   | SSEDoneEvent
   | SSEErrorEvent;
@@ -118,16 +118,21 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
 
   const addMessageMutation = useMutation({
     mutationFn: async (message: Message) => {
-      await saveMessage({
-        chatId,
-        role: message.role,
-        content: message.content,
-        projectId,
-        sources: message.sources?.map(
-          (source) => source.metadata?.filename || JSON.stringify(source),
-        ),
-      });
-      return message;
+      try {
+        const result = await saveMessage({
+          chatId,
+          role: message.role,
+          content: message.content,
+          projectId,
+          sources: message.sources?.map(
+            (source) => source.metadata?.filename || JSON.stringify(source),
+          ),
+        });
+        return message;
+      } catch (error) {
+        if (error instanceof Error) console.error("saveMessage THREW:", error);
+        throw error;
+      }
     },
     onMutate: async (newMessage) => {
       await queryClient.cancelQueries({ queryKey: ["chat-messages", chatId] });
@@ -220,7 +225,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
             case "thinking":
               setThinkingMessage(parsed.message);
               break;
-            case "chunk":
+            case "token":
               accumulatedContent += parsed.content;
               setStreamingMessage(accumulatedContent);
               setThinkingMessage("");

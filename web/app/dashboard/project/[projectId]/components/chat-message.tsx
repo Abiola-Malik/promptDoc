@@ -306,7 +306,7 @@ export function ChatMessages({
                   <div className="max-w-[70%] rounded-md px-3.5 py-2.5">
                     <div
                       className="prose prose-sm prose-invert max-w-none
-                                    prose-p:text-[13px] prose-p:text-[#ccc]"
+                      prose-p:text-[13px] prose-p:text-[#ccc]"
                     >
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
