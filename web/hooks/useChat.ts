@@ -319,6 +319,13 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
             ...placeholder,
             content: `**Error:** ${errorMessage}`,
           });
+          // Persist the error so it survives page refreshes.
+          addMessageMutation.mutate({
+            id: assistantId,
+            role: "assistant",
+            content: `**Error:** ${errorMessage}`,
+            timestamp: new Date(),
+          });
           pollCancelledRef.current = true;
           onError?.(errorMessage);
           return;
@@ -347,6 +354,13 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
           upsertAssistantMessage(assistantId, {
             ...placeholder,
             content: `**Error:** ${errorMessage}`,
+          });
+          // Persist the error so it survives page refreshes.
+          addMessageMutation.mutate({
+            id: assistantId,
+            role: "assistant",
+            content: `**Error:** ${errorMessage}`,
+            timestamp: new Date(),
           });
           pollCancelledRef.current = true;
           onError?.(errorMessage);
@@ -438,11 +452,7 @@ export function useChat({ projectId, chatId, onError }: UseChatOptions) {
     setIsLoading(false);
   }, []);
 
-  const messages =
-    queryClient.getQueryData<Message[]>(["chat-messages", chatId]) ?? [];
-
   return {
-    messages,
     streamingMessage,
     thinkingMessage,
     isLoading,

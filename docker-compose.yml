@@ -52,10 +52,7 @@ services:
       - "8003:8000"
     env_file: ./services/rag-service/.env
     depends_on:
-      - redis
-      - embed-service:
-          condition: service_started
-    restart: on-failure
+      - redis # ← now required since the worker lives here too
     dns:
       - 8.8.8.8
       - 8.8.4.4
