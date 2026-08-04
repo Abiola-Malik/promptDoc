@@ -122,3 +122,23 @@ __pypackages__/
 # Keep tests and app caches ignored explicitly
 tests/__pycache__/
 app/__pycache__/web/.next/
+
+
+# Terraform
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/*.tfvars
+infra/*.tfvars.json
+infra/.terraformrc
+infra/terraform.rc
+infra/terraform.tfplan
+infra/load_env.sh
+
+
+#Terraform infra 
+infra-bootstrap/.terraform/
+infra-bootstrap/*.tfstate
+infra-bootstrap/*.tfstate.backup
+infra-bootstrap/tfplantfplan
