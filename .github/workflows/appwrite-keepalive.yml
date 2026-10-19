@@ -26,7 +26,7 @@ jobs:
             -H "X-Appwrite-Project: $PROJECT_ID" \
             -H "X-Appwrite-Key: $API_KEY" \
             -H "Content-Type: application/json" \
-            "$ENDPOINT/databases" -o /dev/null -w "databases: HTTP %{http_code}\n"
+            "$ENDPOINT/databases" -w "\nHTTP %{http_code}\n"
 
       - name: List users (second management call)
         env:
@@ -41,4 +41,4 @@ jobs:
             -H "X-Appwrite-Key: $API_KEY" \
             -H "Content-Type: application/json" \
             "$ENDPOINT/users?queries[0]=%7B%22method%22%3A%22limit%22%2C%22values%22%3A%5B1%5D%7D" \
-            -o /dev/null -w "users: HTTP %{http_code}\n"
+            -w "\nHTTP %{http_code}\n"
