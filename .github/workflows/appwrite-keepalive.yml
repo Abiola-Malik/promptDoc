@@ -1,0 +1,44 @@
+name: Appwrite keep-alive
+
+on:
+  schedule:
+    # every 3 days at 06:00 UTC, well inside Appwrite's 7-day pause window
+    - cron: "0 6 */3 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: List databases (server API key)
+        env:
+          ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
+          PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
+          API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body \
+            --retry 3 --retry-delay 5 \
+            -H "X-Appwrite-Project: $PROJECT_ID" \
+            -H "X-Appwrite-Key: $API_KEY" \
+            -H "Content-Type: application/json" \
+            "$ENDPOINT/databases" -o /dev/null -w "databases: HTTP %{http_code}\n"
+
+      - name: List users (second management call)
+        env:
+          ENDPOINT: ${{ secrets.APPWRITE_ENDPOINT }}
+          PROJECT_ID: ${{ secrets.APPWRITE_PROJECT_ID }}
+          API_KEY: ${{ secrets.APPWRITE_API_KEY }}
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body \
+            --retry 3 --retry-delay 5 \
+            -H "X-Appwrite-Project: $PROJECT_ID" \
+            -H "X-Appwrite-Key: $API_KEY" \
+            -H "Content-Type: application/json" \
+            "$ENDPOINT/users?queries[0]=%7B%22method%22%3A%22limit%22%2C%22values%22%3A%5B1%5D%7D" \
+            -o /dev/null -w "users: HTTP %{http_code}\n"
